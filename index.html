@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>年上・信</title>
+<style>
+  :root {
+    --bg: #241D2B;
+    --bg-deep: #150F1A;
+    --header: #2E2136;
+    --header-light: #3D2C46;
+    --accent: #C9A15F;
+    --accent-soft: #E0C48A;
+    --ink: #EAE2E6;
+    --muted: #9C8FA3;
+    --bubble: #322638;
+    --bubble-narrative: #2B2131;
+    --line: rgba(233,222,232,0.1);
+    --good: #8FAE86;
+    --bad: #D98080;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-deep);
+    color: var(--ink);
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  #stage {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .phone {
+    width: 100%;
+    max-width: 460px;
+    height: min(880px, 96vh);
+    background: var(--bg);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 30px 70px rgba(0,0,0,0.35);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* ---------- 通用头部 ---------- */
+  .topbar {
+    background: var(--header);
+    color: #EFE9DC;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .topbar .back {
+    background: none; border: none; color: #EFE9DC;
+    font-size: 18px; cursor: pointer; padding: 4px 6px;
+  }
+  .topbar .title { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; flex: 1; }
+  .topbar .sub { font-size: 11px; color: #B9C2BE; margin-top: 2px; }
+
+  .scroll { flex: 1; overflow-y: auto; }
+  .scroll::-webkit-scrollbar { width: 5px; }
+  .scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+  /* ---------- 首页/通讯录 ---------- */
+  .player-card {
+    margin: 14px 16px 6px 16px;
+    background: linear-gradient(135deg, var(--header), var(--header-light));
+    border-radius: 16px;
+    padding: 16px 18px;
+    color: #F3EEE2;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+  }
+  .avatar {
+    width: 50px; height: 50px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .player-card .info { flex: 1; }
+  .player-card .name { font-size: 15.5px; font-weight: 700; }
+  .player-card .meta { font-size: 11.5px; color: #C7CFC9; margin-top: 3px; }
+  .player-card .edit-hint { font-size: 11px; color: var(--accent-soft); }
+
+  .section-label {
+    margin: 18px 16px 8px 16px;
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .char-card {
+    margin: 0 16px 10px 16px;
+    background: var(--bubble);
+    border-radius: 14px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    position: relative;
+  }
+  .char-card .info { flex: 1; min-width: 0; }
+  .char-card .name-row { display: flex; align-items: center; gap: 6px; }
+  .char-card .name { font-size: 14.5px; font-weight: 700; }
+  .char-card .flag { font-size: 11px; }
+  .char-card .meta {
+    font-size: 11.5px; color: var(--muted); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .char-card .trust-line {
+    margin-top: 7px; height: 4px; border-radius: 3px;
+    background: rgba(255,255,255,0.08); overflow: hidden;
+  }
+  .char-card .trust-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  }
+  .char-card .stage-tag {
+    font-size: 10px; color: var(--accent); margin-top: 4px; letter-spacing: 0.5px;
+  }
+  .char-card .del-btn {
+    background: none; border: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 6px;
+  }
+
+  .add-btn {
+    margin: 6px 16px 18px 16px;
+    background: var(--bubble);
+    border: 1.5px dashed var(--muted);
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .empty-hint {
+    margin: 30px 24px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.8;
+  }
+
+  /* ---------- 表单 ---------- */
+  .form-wrap { padding: 16px; }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.5px;
+  }
+  .field input[type=text], .field input[type=number], .field textarea, .field select {
+    width: 100%; border: 1px solid var(--line); background: var(--bubble);
+    border-radius: 10px; padding: 11px 12px; font-size: 14px; font-family: inherit; color: var(--ink);
+  }
+  .field textarea { resize: vertical; min-height: 64px; line-height: 1.6; }
+  .field .row2 { display: flex; gap: 10px; }
+  .field .row2 > div { flex: 1; }
+
+  .tag-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag-dropdown {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--bubble); overflow: hidden;
+  }
+  .tag-dropdown summary {
+    list-style: none; cursor: pointer; padding: 11px 14px; font-size: 13.5px; color: var(--ink);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .tag-dropdown summary::-webkit-details-marker { display: none; }
+  .tag-dropdown summary::after { content: "▾"; color: var(--muted); font-size: 11px; margin-left: 8px; }
+  .tag-dropdown[open] summary { border-bottom: 1px solid var(--line); }
+  .tag-dropdown[open] summary::after { content: "▴"; }
+  .tag-dropdown .tag-wrap { padding: 10px 14px; }
+  .tag-dropdown > div:not(.tag-wrap) { padding: 0 14px; }
+  .tag-chip {
+    padding: 7px 13px; border-radius: 20px; font-size: 12.5px;
+    border: 1px solid var(--line); background: var(--bubble); cursor: pointer; color: var(--ink);
+  }
+  .tag-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .switch { position: relative; width: 42px; height: 24px; }
+  .switch input { display:none; }
+  .switch .track {
+    position: absolute; inset: 0; background: #d5cdbd; border-radius: 20px; transition: 0.2s; cursor: pointer;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; top: 3px; left: 3px; transition: 0.2s;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { left: 21px; }
+
+  .slider-wrap { padding-top: 4px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider-labels { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+  .primary-btn {
+    width: 100%; background: var(--accent); color: #fff; border: none;
+    padding: 14px; border-radius: 12px; font-size: 14.5px; font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+  }
+  .primary-btn:hover { background: #c9683f; }
+  .primary-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .ghost-btn {
+    width: 100%; background: none; color: var(--muted); border: 1px solid var(--line);
+    padding: 12px; border-radius: 12px; font-size: 13.5px; cursor: pointer; margin-top: 8px;
+  }
+
+  /* ---------- 剧情/聊天流 ---------- */
+  .thread { padding: 16px 14px 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  .msg-row { display: flex; align-items: flex-start; gap: 6px; max-width: 100%; }
+  .msg-row.user-row { justify-content: flex-end; }
+  .edit-btn {
+    background: none; border: none; color: var(--muted); font-size: 11px; cursor: pointer;
+    padding: 4px; opacity: 0.5; flex-shrink: 0; margin-top: 4px;
+  }
+  .edit-btn:hover { opacity: 1; color: var(--accent); }
+  .msg-row.editing { flex-direction: column; width: 100%; }
+  .edit-textarea {
+    width: 100%; min-height: 64px; border: 1px solid var(--accent); border-radius: 10px;
+    padding: 10px; font-family: inherit; font-size: 13.5px; line-height: 1.6; color: var(--ink);
+  }
+  .edit-btn-row { display: flex; gap: 8px; margin-top: 6px; }
+  .edit-save-btn {
+    background: var(--accent); color: #fff; border: none; padding: 6px 16px;
+    border-radius: 8px; font-size: 12px; cursor: pointer;
+  }
+  .edit-cancel-btn {
+    background: none; border: 1px solid var(--line); color: var(--muted); padding: 6px 16px;
+    border-radius: 8px; font-size: 12px; cursor: pointer;
+  }
+
+  .stage-pill {
+    align-self: center;
+    font-size: 10.5px; color: var(--muted); background: rgba(255,255,255,0.06);
+    padding: 4px 12px; border-radius: 12px; letter-spacing: 1px;
+  }
+  .system-pill {
+    align-self: center; cursor: pointer;
+    font-size: 11.5px; color: var(--accent-soft);
+    background: rgba(201,161,95,0.12); border: 1px solid rgba(201,161,95,0.3);
+    padding: 7px 14px; border-radius: 14px; margin: 4px 0;
+  }
+  .system-pill:hover { background: rgba(201,161,95,0.2); }
+
+  .narration-block {
+    font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+    font-size: 14.5px;
+    line-height: 2;
+    color: var(--ink);
+    padding: 2px 4px;
+    max-width: 96%;
+  }
+
+  .dialogue-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .dialogue-tag {
+    font-size: 10.5px; color: var(--accent); font-weight: 700; letter-spacing: 0.5px; padding-left: 4px;
+  }
+  .bubble-dialogue {
+    background: var(--bubble-narrative);
+    border: 1px solid var(--line);
+    border-radius: 4px 16px 16px 16px;
+    padding: 12px 15px;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: var(--ink);
+    max-width: 88%;
+  }
+
+  .bubble-user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 16px 4px 16px 16px;
+    padding: 11px 15px;
+    font-size: 14px;
+    max-width: 78%;
+    line-height: 1.6;
+  }
+
+  .typing {
+    display: flex; gap: 5px; align-items: center; padding: 12px 16px;
+    background: var(--bubble-narrative); border-radius: 4px 16px 16px 16px; width: fit-content;
+    border: 1px solid var(--line);
+  }
+  .typing span {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+  .choices-panel {
+    padding: 10px 14px 16px 14px;
+    background: linear-gradient(180deg, transparent, var(--bg) 30%);
+    display: flex; flex-direction: column; gap: 8px;
+    flex-shrink: 0;
+  }
+  .choice-btn {
+    text-align: left; background: var(--bubble); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 13px; cursor: pointer; font-family: inherit;
+  }
+  .choice-btn:hover { border-color: var(--accent); }
+  .choice-btn .ctext { font-size: 13.8px; color: var(--ink); display: block; }
+  .choice-btn .csub { font-size: 11px; color: var(--muted); margin-top: 4px; display: block; font-style: italic; }
+
+  .custom-input-row { display: flex; gap: 8px; margin-top: 2px; }
+  .custom-input-row input {
+    flex: 1; border: 1px solid var(--line); background: var(--bubble);
+    border-radius: 20px; padding: 10px 15px; font-size: 13.5px; font-family: inherit; color: var(--ink);
+  }
+  .custom-input-row button {
+    width: 40px; height: 40px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  }
+  .custom-input-row button:hover { background: #c9683f; }
+
+  .error-box {
+    margin: 14px; padding: 14px; background: rgba(217,128,128,0.12); border: 1px solid rgba(217,128,128,0.35);
+    border-radius: 12px; font-size: 13px; color: var(--bad);
+  }
+  .error-box button {
+    margin-top: 10px; background: var(--accent); color: #fff; border: none;
+    padding: 8px 16px; border-radius: 8px; font-size: 12.5px; cursor: pointer;
+  }
+
+  .hidden { display: none !important; }
+
+  .bottom-tabs {
+    display: flex; flex-shrink: 0; border-top: 1px solid var(--line);
+    background: var(--header); padding: 8px 0 10px 0;
+  }
+  .bottom-tab {
+    flex: 1; background: none; border: none; color: var(--muted);
+    font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
+    font-family: inherit;
+  }
+  .bottom-tab .bt-icon { font-size: 17px; }
+  .bottom-tab.active { color: var(--accent-soft); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"><div class="phone" id="phone"></div></div>
+
+<script>
+const TAGS = ["冷淡","毒舌","占有欲强","温柔","幽默风趣","强势","傲娇","理性克制","浪漫","少言寡语","宠溺","高冷学霸"];
+
+const STAGES = [
+  { key:"meet",        label:"初遇",       min:0,   goal:"初次搭话，建立基础印象，双方还带着礼貌和试探，尚不熟悉" },
+  { key:"chat",         label:"日常闲聊",   min:12,  goal:"轻松日常闲聊，逐渐展露对方的背景、习惯与喜好" },
+  { key:"alone",        label:"意外独处",   min:28,  goal:"一次意外的独处场景（电梯、堵车、加班留守、共乘等），气氛微妙升温" },
+  { key:"vulnerable",   label:"示弱时刻",   min:45,  goal:"对方在你面前难得露出疲惫、脆弱或不设防的一面" },
+  { key:"care",         label:"照顾与被照顾", min:62,  goal:"生病、受伤或情绪低落，两人之间发生照顾与被照顾的互动" },
+  { key:"conflict",     label:"误会与和解", min:78,  goal:"因为一件小事产生误会或分歧，需要沟通和解开" },
+  { key:"crisis",       label:"危机时刻",   min:94,  goal:"对方遇到工作或生活上的重大难题，你的支持成为关键" },
+  { key:"signal",       label:"心动信号",   min:110, goal:"对方主动释放明确的心动信号，比如吃醋、暗示或试探性靠近" },
+  { key:"confession",   label:"表白契机",   min:126, goal:"关键的表白/心意确认时刻，两人关系面临真正的转折点" },
+  { key:"together",     label:"恋人日常",   min:142, goal:"已经确认心意之后的甜蜜日常小剧场，偶有小情绪也很快化解，可反复发生" }
+];
+
+function getStage(trust){
+  let cur = STAGES[0];
+  for (const s of STAGES) { if (trust >= s.min) cur = s; }
+  return cur;
+}
+
+function hashHue(str){
+  let h = 0;
+  for (let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) % 360; }
+  return h;
+}
+
+function calcAge(birthDateStr){
+  if (!birthDateStr) return null;
+  const b = new Date(birthDateStr);
+  if (isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+
+function yearsAgoISO(years){
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0,10);
+}
+
+function todayContextText(){
+  return new Date().toLocaleDateString("zh-CN", { year:"numeric", month:"long", day:"numeric", weekday:"long" });
+}
+
+// ---------------- 关系原型标签库 ----------------
+const REL_TAG_GROUPS = [
+  { group:"掌控/服从", tags:["掌控主导","调教规训","极端占有欲型","纵容惩罚型","疯批偏执"] },
+  { group:"反差/张力", tags:["外强内黏","暗恋已久终于爆发","实为脆弱"] },
+  { group:"关系起点", tags:["青梅竹马","对手转恋人","地下恋情","假戏真做","打赌复仇","猎人型精准追猎"] },
+  { group:"花心/禁忌", tags:["花花公子","社交花蝴蝶","在外出轨(痛苦线)","在外出轨(轻松线)","我是第三者"] },
+  { group:"权力不对等", tags:["上司下属","导师研究生","医患","律师委托人","心理咨询师来访者","公众人物与粉丝","教练运动员"] },
+  { group:"基础调性", tags:["高冷","真·成熟稳重","治愈系温柔守护","柏拉图纯爱","重欲缠绵","调情大师","忘年孤傲","危险职业守护"] }
+];
+const ALL_REL_TAGS = REL_TAG_GROUPS.flatMap(g=>g.tags);
+const MAX_REL_TAGS = 2;
+
+// 权力不对等标签：选中后需要明确谁是哪个角色
+const POWER_PAIR_TAGS = {
+  "上司下属": ["上司","下属"],
+  "导师研究生": ["导师","研究生"],
+  "医患": ["医生","病人"],
+  "律师委托人": ["律师","委托人"],
+  "心理咨询师来访者": ["心理咨询师","来访者"],
+  "公众人物与粉丝": ["公众人物","粉丝"],
+  "教练运动员": ["教练","运动员"]
+};
+
+// ---------------- 外部AI服务商预设 ----------------
+const PROVIDER_PRESETS = {
+  builtin:  { label:"内置Claude（默认，无需填key）", baseUrl:"", model:"" },
+  deepseek: { label:"DeepSeek", baseUrl:"https://api.deepseek.com/v1/chat/completions", model:"deepseek-chat" },
+  glm:      { label:"智谱GLM", baseUrl:"https://open.bigmodel.cn/api/paas/v4/chat/completions", model:"glm-4-flash" },
+  kimi:     { label:"月之暗面 Kimi", baseUrl:"https://api.moonshot.cn/v1/chat/completions", model:"moonshot-v1-8k" },
+  custom:   { label:"其他（自定义，需OpenAI兼容格式）", baseUrl:"", model:"" }
+};
+
+// ---------------- 预设年上（首次进入自动加入通讯录） ----------------
+const PRESET_CHARACTERS = [
+  { id:"preset_1", name:"厉深", gender:"男", birthDate:yearsAgoISO(34), occupation:"跨国资本集团CEO",
+    appearance:"常年三件套西装，袖扣是他唯一的装饰品，眼神扫过来像在核对合同条款",
+    tags:["强势","理性克制","占有欲强"], relTags:["掌控主导","极端占有欲型"],
+    personalityText:"习惯把喜欢说成'安排'，从不问你愿不愿意，只问你什么时候能准备好",
+    speechStyle:"语速慢，惯用陈述句而非疑问句，很少解释自己的决定",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] },
+  { id:"preset_2", name:"温衍", gender:"男", birthDate:yearsAgoISO(31), occupation:"创伤外科医生",
+    appearance:"手术服外总套一件洗旧的夹克，指关节有常年握手术刀留下的薄茧",
+    tags:["温柔","少言寡语"], relTags:["外强内黏","真·成熟稳重"],
+    personalityText:"工作时惜字如金，私下会突然说很长一段话解释自己在想什么",
+    speechStyle:"平时话少，认真起来会一口气说很多，说完又有点不好意思",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] },
+  { id:"preset_3", name:"席闻", gender:"男", birthDate:yearsAgoISO(33), occupation:"艺术品拍卖行主理人",
+    appearance:"衬衫总解开最上面两颗扣子，笑起来带点痞气",
+    tags:["幽默风趣","浪漫"], relTags:["花花公子","调情大师"],
+    personalityText:"见谁都能聊得来，唯独在你面前偶尔会突然没话说",
+    speechStyle:"擅长说漂亮话，认真起来反而会笨嘴拙舌",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] },
+  { id:"preset_4", name:"江辞明", gender:"男", birthDate:yearsAgoISO(36), occupation:"律所高级合伙人（你的直属上司）",
+    appearance:"永远的深色西装，桌上文件按颜色分类，从没乱过",
+    tags:["冷淡","理性克制","高冷学霸"], relTags:["上司下属"], relRoles:{"上司下属":true},
+    personalityText:"对下属一视同仁地严格，唯独对你的失误会破例多提醒一句",
+    speechStyle:"说话直接，习惯用法律用语，很少带情绪词",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] },
+  { id:"preset_5", name:"陆则安（Ethan）", gender:"男", birthDate:yearsAgoISO(35), occupation:"私人安全顾问/前特种兵",
+    appearance:"常年一身战术风格的黑色外套，手腕上有旧伤疤",
+    tags:["强势","理性克制"], relTags:["猎人型精准追猎","危险职业守护"],
+    personalityText:"说话直接甚至有点冲，但对你的安全有近乎偏执的敏感度",
+    speechStyle:"中文夹杂英文单词和短句，习惯用命令式的语气表达关心，比如'Stay close，别乱跑'",
+    isForeign:true, langBg:"在美国长大的华裔，中文是后来重新学的", mixRatio:45, trust:0, memory:[] },
+  { id:"preset_6", name:"沈知白", gender:"男", birthDate:yearsAgoISO(32), occupation:"独立书店主理人",
+    appearance:"总穿着洗得发软的棉麻衬衫，身上有旧书本的味道",
+    tags:["温柔","浪漫"], relTags:["柏拉图纯爱","治愈系温柔守护"],
+    personalityText:"从不催促关系往前走，觉得慢慢靠近才是最珍贵的部分",
+    speechStyle:"语气很轻，喜欢用比喻，很少说重话",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] },
+  { id:"preset_7", name:"顾承川", gender:"男", birthDate:yearsAgoISO(45), occupation:"隐退的当代艺术家",
+    appearance:"常年穿深色亚麻长衫，手指有常年握画笔的薄茧，眼神总带着审视",
+    tags:["占有欲强","理性克制","傲娇"], relTags:["疯批偏执","忘年孤傲"],
+    personalityText:"爱起来没有分寸感，会把占有欲包装成'我只是想更了解你一点'",
+    speechStyle:"语速很慢，喜欢用近乎审讯的方式问问题，却又在你答不上来时突然心软",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] }
+];
+
+// 第二批预设（已确立关系但偷腥 / 纵容惩罚型），单独播种，不影响已用过第一批的老用户
+const PRESET_CHARACTERS_V2 = [
+  { id:"preset_8", name:"周聿澈", gender:"男", birthDate:yearsAgoISO(34), occupation:"广告公司创意总监",
+    appearance:"衣品很好，身上常年一股干净的木质调香水，笑起来很有说服力",
+    tags:["浪漫","幽默风趣","理性克制"], relTags:["在外出轨(痛苦线)"],
+    personalityText:"对你依然体贴、依然记得你的所有小习惯，但最近总用'加班'搪塞行踪，身上偶尔会有解释不清的痕迹",
+    speechStyle:"惯用哄人的语气，被追问细节时会巧妙转移话题",
+    isForeign:false, langBg:"", mixRatio:0,
+    trust:148, memory:["你们已经正式确认关系半年多","最近他手机总是扣着放，加班频率明显变高"] },
+  { id:"preset_9", name:"沈聃", gender:"男", birthDate:yearsAgoISO(38), occupation:"夜间会所主理人",
+    appearance:"常年一身低调定制西装，身上有清冷的雪松调香水，手指关节分明",
+    tags:["强势","占有欲强","理性克制"], relTags:["纵容惩罚型","掌控主导"],
+    personalityText:"宠你几乎没有上限，什么小任性都由着你，唯独越界那次会让你清楚记住谁才是真正说了算的人",
+    speechStyle:"平时语气很轻很纵容，'管教'那一刻语气会突然变得很慢很稳",
+    isForeign:false, langBg:"", mixRatio:0, trust:0, memory:[] }
+];
+
+// ---------------- 状态 ----------------
+const App = {
+  profile: null,
+  roster: [],
+  screen: "loading",
+  editingCharId: null,
+  activeCharId: null,
+  thread: [],       // {type:'narrative'|'user', text}
+  currentChoices: null,
+  waitingReply: false,
+  tempTags: [],
+  tempRelTags: [],
+  fetchError: false,
+  aiSettings: { provider:"builtin", apiKey:"", baseUrl:"", model:"" },
+  settingsTestMsg: "",
+  lastSegmentCount: 0,
+  lastAppliedDelta: 0,
+  feed: [],
+  feedBusy: false,
+
+  async init(){
+    try {
+      const r = await window.storage.get("profile", false);
+      this.profile = JSON.parse(r.value);
+    } catch(e) { this.profile = null; }
+    try {
+      const r = await window.storage.get("roster", false);
+      this.roster = JSON.parse(r.value);
+    } catch(e) { this.roster = []; }
+
+    let seeded = false;
+    try {
+      const r = await window.storage.get("seeded", false);
+      seeded = r.value === "true";
+    } catch(e) { seeded = false; }
+    if (!seeded) {
+      this.roster = PRESET_CHARACTERS.map(c => ({ ...c, memory:[...c.memory] })).concat(this.roster);
+      await this.saveRoster();
+      try { await window.storage.set("seeded", "true", false); } catch(e){ console.error(e); }
+    }
+
+    let seededV2 = false;
+    try {
+      const r = await window.storage.get("seeded_v2", false);
+      seededV2 = r.value === "true";
+    } catch(e) { seededV2 = false; }
+    if (!seededV2) {
+      const newOnes = PRESET_CHARACTERS_V2.map(c => ({ ...c, memory:[...c.memory] }));
+      this.roster = this.roster.concat(newOnes);
+      await this.saveRoster();
+      try { await window.storage.set("seeded_v2", "true", false); } catch(e){ console.error(e); }
+    }
+
+    try {
+      const r = await window.storage.get("ai-settings", false);
+      this.aiSettings = JSON.parse(r.value);
+    } catch(e) { /* 保持默认内置Claude */ }
+
+    let migrated = false;
+    const pronounToGender = pr => pr === "她" ? "女" : (pr === "他" ? "男" : "其他");
+    if (this.profile) {
+      if (this.profile.pronoun && !this.profile.gender) { this.profile.gender = pronounToGender(this.profile.pronoun); migrated = true; }
+      if (this.profile.age && !this.profile.birthDate) { this.profile.birthDate = yearsAgoISO(this.profile.age); migrated = true; }
+    }
+    this.roster.forEach(c => {
+      if (c.pronoun && !c.gender) { c.gender = pronounToGender(c.pronoun); migrated = true; }
+      if (c.age && !c.birthDate) { c.birthDate = yearsAgoISO(c.age); migrated = true; }
+    });
+    if (migrated) {
+      if (this.profile) await this.saveProfile(this.profile);
+      await this.saveRoster();
+    }
+
+    try {
+      const r = await window.storage.get("feed", false);
+      this.feed = JSON.parse(r.value);
+    } catch(e) { this.feed = []; }
+
+    if (!this.profile) {
+      this.screen = "playerEdit";
+      this.tempTags = [];
+    } else {
+      this.screen = "home";
+    }
+    this.render();
+
+    if (this.feed.length === 0) {
+      this.refreshFeed();
+    }
+  },
+
+  async saveProfile(p){
+    this.profile = p;
+    try { await window.storage.set("profile", JSON.stringify(p), false); } catch(e){ console.error(e); }
+  },
+
+  async saveRoster(){
+    try { await window.storage.set("roster", JSON.stringify(this.roster), false); } catch(e){ console.error(e); }
+  },
+
+  async saveFeed(){
+    const trimmed = this.feed.slice(0, 60);
+    try { await window.storage.set("feed", JSON.stringify(trimmed), false); } catch(e){ console.error(e); }
+  },
+
+  goHome(){ this.screen = "home"; this.render(); },
+
+  openFeed(){ this.screen = "feed"; this.render(); },
+
+  bottomTabsHtml(active){
+    return `
+      <div class="bottom-tabs">
+        <button class="bottom-tab ${active==='home'?'active':''}" id="tabHome"><span class="bt-icon">☰</span>通讯录</button>
+        <button class="bottom-tab ${active==='feed'?'active':''}" id="tabFeed"><span class="bt-icon">◎</span>动态广场</button>
+      </div>
+    `;
+  },
+
+  bindBottomTabs(root){
+    const h = root.querySelector("#tabHome");
+    const f = root.querySelector("#tabFeed");
+    if (h) h.onclick = () => this.goHome();
+    if (f) f.onclick = () => this.openFeed();
+  },
+
+  openSettings(){
+    this.settingsTestMsg = "";
+    this.screen = "settings";
+    this.render();
+  },
+
+  async saveAiSettings(s){
+    this.aiSettings = s;
+    try { await window.storage.set("ai-settings", JSON.stringify(s), false); } catch(e){ console.error(e); }
+  },
+
+  async exportBackup(root){
+    const msgEl = root.querySelector("#backupMsg");
+    try {
+      const conversations = {};
+      for (const c of this.roster) {
+        const conv = await this.loadConversation(c.id);
+        if (conv) conversations[c.id] = conv;
+      }
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        profile: this.profile,
+        roster: this.roster,
+        aiSettings: this.aiSettings,
+        conversations
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "年上模拟器备份_" + new Date().toISOString().slice(0,10) + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      msgEl.textContent = "✓ 已导出";
+      msgEl.style.color = "var(--good)";
+    } catch(e) {
+      msgEl.textContent = "✗ 导出失败：" + e.message;
+      msgEl.style.color = "var(--bad)";
+    }
+  },
+
+  async importBackup(file, root){
+    const msgEl = root.querySelector("#backupMsg");
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      if (backup.profile) await this.saveProfile(backup.profile);
+      if (backup.roster) { this.roster = backup.roster; await this.saveRoster(); }
+      if (backup.aiSettings) await this.saveAiSettings(backup.aiSettings);
+      if (backup.conversations) {
+        for (const charId of Object.keys(backup.conversations)) {
+          try { await window.storage.set("convo:" + charId, JSON.stringify(backup.conversations[charId]), false); } catch(e){}
+        }
+      }
+      try { await window.storage.set("seeded", "true", false); } catch(e){}
+      try { await window.storage.set("seeded_v2", "true", false); } catch(e){}
+      msgEl.textContent = "✓ 导入成功，正在刷新…";
+      msgEl.style.color = "var(--good)";
+      setTimeout(() => location.reload(), 800);
+    } catch(e) {
+      msgEl.textContent = "✗ 导入失败：文件格式不对，或者" + e.message;
+      msgEl.style.color = "var(--bad)";
+    }
+  },
+
+  async testConnection(root, settings){
+    const btn = root.querySelector("#testBtn");
+    const msgEl = root.querySelector("#testMsg");
+    btn.disabled = true;
+    msgEl.textContent = "测试中…";
+    msgEl.style.color = "var(--muted)";
+    try {
+      let reply;
+      if (settings.provider === "builtin") {
+        reply = await this.callClaude("请只回复两个字：收到");
+      } else {
+        reply = await this.callExternal("请只回复两个字：收到", settings);
+      }
+      msgEl.textContent = "✓ 连接成功，返回：" + reply.slice(0,20);
+      msgEl.style.color = "var(--good)";
+    } catch(e) {
+      msgEl.textContent = "✗ 连接失败：" + e.message + "（可能是key不对，或者该服务商不支持浏览器直连）";
+      msgEl.style.color = "var(--bad)";
+    }
+    btn.disabled = false;
+  },
+
+  openPlayerEdit(){
+    this.tempTags = this.profile ? [...this.profile.tags] : [];
+    this.screen = "playerEdit";
+    this.render();
+  },
+
+  openNewChar(){
+    this.editingCharId = null;
+    this.tempTags = [];
+    this.screen = "charEdit";
+    this.render();
+  },
+
+  openEditChar(id){
+    const c = this.roster.find(x=>x.id===id);
+    this.editingCharId = id;
+    this.tempTags = c ? [...c.tags] : [];
+    this.screen = "charEdit";
+    this.render();
+  },
+
+  deleteChar(id, ev){
+    ev.stopPropagation();
+    if (!confirm("确定删除这个年上吗？聊天记录和好感度都会消失。")) return;
+    this.roster = this.roster.filter(c=>c.id!==id);
+    this.saveRoster();
+    this.render();
+  },
+
+  async loadConversation(charId){
+    try {
+      const r = await window.storage.get("convo:" + charId, false);
+      return JSON.parse(r.value);
+    } catch(e) { return null; }
+  },
+
+  async saveConversation(charId){
+    const data = { thread: this.thread, choices: this.currentChoices, pendingMemory: this._pendingMemory || "" };
+    try { await window.storage.set("convo:" + charId, JSON.stringify(data), false); } catch(e){ console.error(e); }
+  },
+
+  async resetConversation(){
+    const charId = this.activeCharId;
+    this.thread = [];
+    this.currentChoices = null;
+    this._pendingMemory = "";
+    this.fetchError = false;
+    try { await window.storage.delete("convo:" + charId, false); } catch(e){}
+    this.waitingReply = true;
+    this.render();
+    await this.fetchNextScene();
+  },
+
+  async openStory(id){
+    this.activeCharId = id;
+    this.fetchError = false;
+    const saved = await this.loadConversation(id);
+    if (saved && saved.thread && saved.thread.length) {
+      this.thread = saved.thread;
+      this.currentChoices = saved.choices || null;
+      this._pendingMemory = saved.pendingMemory || "";
+      this.waitingReply = false;
+      this.screen = "story";
+      this.render();
+      if (!this.currentChoices) {
+        this.waitingReply = true;
+        await this.fetchNextScene();
+      }
+    } else {
+      this.thread = [];
+      this.currentChoices = null;
+      this.waitingReply = true;
+      this.screen = "story";
+      this.render();
+      await this.fetchNextScene();
+    }
+  },
+
+  // ---------------- AI 调用 ----------------
+  getRecentHistoryText(){
+    const recent = this.thread.slice(-10);
+    if (!recent.length) return "（这是你们的第一次见面，还没有过往对话，请自行设定一个合理的初遇场景）";
+    return recent.map(m => {
+      if (m.type === "user") return "【你】" + m.text;
+      if (m.type === "dialogue") return "【对方】" + m.text;
+      return "【旁白】" + m.text;
+    }).join("\n");
+  },
+
+  buildRoleAssignmentText(char){
+    if (!char.relTags || !char.relRoles) return "";
+    const lines = [];
+    char.relTags.forEach(t => {
+      if (POWER_PAIR_TAGS[t] && char.relRoles[t] !== undefined) {
+        const pair = POWER_PAIR_TAGS[t];
+        const line = char.relRoles[t]
+          ? `在"${t}"这段关系里，对方是${pair[0]}，玩家是${pair[1]}。`
+          : `在"${t}"这段关系里，玩家是${pair[0]}，对方是${pair[1]}。`;
+        lines.push(line);
+      }
+    });
+    return lines.join("");
+  },
+
+  buildPrompt(char, includeOpening){
+    const p = this.profile;
+    const stage = getStage(char.trust);
+    const memoryText = (char.memory && char.memory.length) ? char.memory.join("；") : "（暂无特别记忆）";
+    const recentHistory = this.getRecentHistoryText();
+    const langInstruction = char.isForeign
+      ? `这个角色是外国人设（语言背景：${char.langBg || "外国人"}），中英混搭程度为 ${char.mixRatio}%（0%表示几乎全中文只偶尔蹦单词，100%表示大量使用英文短句和倒装语序，中间值请按比例适度混合英文单词或短句到台词与叙述中）。`
+      : "这个角色使用纯中文对话，不需要任何英文。";
+
+    return `你是一个恋爱剧情写作引擎，正在为一个"年上模拟器"文字游戏生成剧情。请严格按要求输出，不要输出任何JSON以外的文字、不要用markdown代码块包裹。
+
+【玩家人设】
+姓名：${p.name}　性别：${p.gender}　年龄：${calcAge(p.birthDate)}岁　职业：${p.occupation}
+外表风格：${p.appearance}
+性格标签：${p.tags.join("、")}
+性格补充：${p.personalityText || "无"}
+说话方式：${p.speechStyle || "无特别习惯"}
+
+【年上角色人设】
+姓名：${char.name}　性别：${char.gender}　年龄：${calcAge(char.birthDate)}岁（比玩家年长）　职业：${char.occupation}
+外表风格：${char.appearance}
+性格标签：${char.tags.join("、")}
+关系原型（决定关系基调与张力来源，请重点体现）：${(char.relTags && char.relTags.length) ? char.relTags.join("、") : "无特别设定"}
+${this.buildRoleAssignmentText(char)}
+性格补充：${char.personalityText || "无"}
+说话方式：${char.speechStyle || "无特别习惯"}
+${langInstruction}
+
+【当前关系阶段】${stage.label}
+本阶段剧情目标：${stage.goal}
+当前好感度数值：${char.trust}
+过去的关键记忆：${memoryText}
+【现实中的今天】${todayContextText()}（如果剧情里提到日期、星期、季节，请以此为准）
+
+【最近剧情回顾（请紧密承接这里的场景、时间、地点、人物状态，不要凭空跳到不相关的新场景或新地点）】
+${recentHistory}
+
+【写作要求】
+1. 用小说笔法写这段剧情，但不要把叙事和对话糅在一整段里，而是拆分成多个"片段"（segments），每个片段标明类型：
+   - "narration"：环境、动作、心理描写（第二人称"你"视角），不包含对方的直接引语
+   - "dialogue"：对方说出的一句话本身，纯粹是台词内容，不要加「」引号、不要加"他说""她说"这类提示语，也不要包含旁白
+   一段完整剧情通常是 narration → dialogue → narration → dialogue 这样交替，2-5个片段，总字数150-300字。
+2. 对话内容要符合角色的性格标签、说话方式与语言混搭要求。
+3. ${includeOpening
+      ? (char.seed ? `这是你们这次见面的开场，玩家为你们的相识写了这样的设定，请以此为背景自然展开，不要另编：${char.seed}` : "这是你们这次见面的开场，请自然地设定一个合理的初遇/相处场景展开。")
+      : "请严格承接上面【最近剧情回顾】里的场景状态继续发展——如果上一刻还在电梯里，这一刻不能突然出现在家里，除非剧情里有明确的转场动作（比如一起走出电梯、一起离开办公室），否则要保持在同一个场景里推进。"}
+4. 给出3个玩家可选的回应，每个回应拆成两部分：
+   - "action"：玩家的动作/表情/心理活动描写（第二人称"你"视角，比如"你別过脸，没接话"），如果这个回应只是单纯说话没有特别动作，action留空字符串
+   - "line"：玩家说出的话本身，纯对话内容，不要加引号，如果这个回应只是动作没有说话，line留空字符串
+   - action和line不能同时为空，但可以只有其中一个
+   - 另外附一句"subtext"潜台词（这句话/这个动作背后玩家的真实心思，10-16字）
+5. 新增一个字段"lastActionTrustDelta"：根据【最近剧情回顾】里最后一条"【你】"的发言或行动，评价它对这段关系的影响，给出一个-4到12之间的整数。如果这是开场、还没有玩家的行动，这个字段填0。
+6. 如果这段剧情里发生了值得记住的具体事情（比如透露了某个爱好、恐惧、习惯、约定），用不超过20字的一句话写入memoryNote；如果没有特别值得记的内容，memoryNote返回空字符串。
+7. 涉及亲密或身体接触的情节，只写到暧昧张力、心理描写和克制的动作为止，不要写具体的身体/性描写，关键时刻可以用留白或转场处理。
+8. 额外判断：这一幕有没有可能被外人拍到、认出、偶遇、截图或以其他方式流出到网络上（比如被狗仔拍到、被路人认出合影、被粉丝偶遇、被朋友截图转发等）？如果有，用一句客观描述（不超过30字，只写外人会看到的画面/内容本身，不要写心理活动）写入publicIncident字段；如果没有这种可能性，publicIncident留空字符串。不要为了流出而流出——大多数日常场景都不会有，只有真正有戏剧性、暴露性、外人会感兴趣的时刻才触发（比如被拍到亲密瞬间、公众人物身份的角色被偶遇、绯闻线索等）。
+
+请只输出如下格式的JSON（不要有其它任何文字）：
+{"segments":[{"type":"narration","text":"..."},{"type":"dialogue","text":"..."}],"choices":[{"action":"...","line":"...","subtext":"..."},{"action":"...","line":"...","subtext":"..."},{"action":"...","line":"...","subtext":"..."}],"lastActionTrustDelta":0,"memoryNote":"...","publicIncident":""}`;
+  },
+
+  async callClaude(promptText){
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: promptText }]
+      })
+    });
+    const data = await response.json();
+    const block = (data.content || []).find(b => b.type === "text");
+    if (!block) throw new Error("空响应");
+    return block.text;
+  },
+
+  async callExternal(promptText, settings){
+    if (!settings.baseUrl) throw new Error("未填写接口地址");
+    if (!settings.apiKey) throw new Error("未填写API Key");
+    const response = await fetch(settings.baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + settings.apiKey
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: "user", content: promptText }],
+        max_tokens: 1000
+      })
+    });
+    if (!response.ok) {
+      let detail = "";
+      try { detail = (await response.text()).slice(0,120); } catch(e){}
+      throw new Error("HTTP " + response.status + " " + detail);
+    }
+    const data = await response.json();
+    const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!content) throw new Error("响应格式不符合预期（未取到choices[0].message.content）");
+    return content;
+  },
+
+  async callAI(promptText){
+    const s = this.aiSettings;
+    if (!s || s.provider === "builtin" || !s.apiKey) {
+      return this.callClaude(promptText);
+    }
+    return this.callExternal(promptText, s);
+  },
+
+  async fetchNextScene(){
+    const char = this.roster.find(c=>c.id===this.activeCharId);
+    if (!char) return;
+    this.waitingReply = true;
+    this.renderTypingOnly();
+    try {
+      const isOpening = this.thread.length === 0;
+      const prompt = this.buildPrompt(char, isOpening);
+      let raw = await this.callAI(prompt);
+      raw = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(raw);
+      const deltaApplied = isOpening ? 0 : (parseInt(parsed.lastActionTrustDelta) || 0);
+      if (!isOpening) {
+        char.trust = Math.max(0, char.trust + deltaApplied);
+      }
+      const stageLabelNow = getStage(char.trust).label;
+      let segCount = 0;
+      (parsed.segments || []).forEach((seg, i) => {
+        const entry = { type: seg.type === "dialogue" ? "dialogue" : "narration", text: seg.text };
+        if (i === 0) entry.stageLabel = stageLabelNow;
+        this.thread.push(entry);
+        segCount++;
+      });
+      this.lastSegmentCount = segCount;
+      this.lastAppliedDelta = deltaApplied;
+      this.currentChoices = (parsed.choices || []).map(c => ({
+        action: c.action || "",
+        line: c.line || "",
+        subtext: c.subtext || ""
+      }));
+      this._pendingMemory = parsed.memoryNote || "";
+      this.waitingReply = false;
+      if (parsed.publicIncident) {
+        this.thread.push({ type: "system", text: "📰 这一幕被传到了网上", incidentText: parsed.publicIncident });
+        this.lastSegmentCount += 1;
+        this.triggerPublicIncident(char, parsed.publicIncident);
+      }
+      await this.saveRoster();
+      await this.saveConversation(this.activeCharId);
+      this.render();
+    } catch(e){
+      console.error(e);
+      this.waitingReply = false;
+      this.fetchError = true;
+      this.render();
+    }
+  },
+
+  async pickChoice(idx){
+    if (this.waitingReply) return;
+    const char = this.roster.find(c=>c.id===this.activeCharId);
+    const choice = this.currentChoices[idx];
+    if (choice.action) this.thread.push({ type:"narration", text: choice.action });
+    if (choice.line) this.thread.push({ type:"user", text: choice.line });
+    if (this._pendingMemory) {
+      char.memory = char.memory || [];
+      char.memory.push(this._pendingMemory);
+      if (char.memory.length > 8) char.memory.shift();
+    }
+    this.currentChoices = null;
+    this.fetchError = false;
+    await this.saveRoster();
+    await this.saveConversation(this.activeCharId);
+    this.render();
+    await this.fetchNextScene();
+  },
+
+  async sendCustomAction(text){
+    if (this.waitingReply) return;
+    const trimmed = (text || "").trim();
+    if (!trimmed) return;
+    const char = this.roster.find(c=>c.id===this.activeCharId);
+    this.thread.push({ type:"user", text: trimmed });
+    if (this._pendingMemory) {
+      char.memory = char.memory || [];
+      char.memory.push(this._pendingMemory);
+      if (char.memory.length > 8) char.memory.shift();
+    }
+    this.currentChoices = null;
+    this.fetchError = false;
+    await this.saveRoster();
+    await this.saveConversation(this.activeCharId);
+    this.render();
+    await this.fetchNextScene();
+  },
+
+  retryFetch(){
+    this.fetchError = false;
+    this.fetchNextScene();
+  },
+
+  async regenerateLast(){
+    if (this.waitingReply) return;
+    const char = this.roster.find(c=>c.id===this.activeCharId);
+    if (!char) return;
+    char.trust = Math.max(0, char.trust - (this.lastAppliedDelta || 0));
+    const n = this.lastSegmentCount || 0;
+    for (let i = 0; i < n; i++) this.thread.pop();
+    this.currentChoices = null;
+    this.fetchError = false;
+    await this.saveRoster();
+    await this.saveConversation(this.activeCharId);
+    this.render();
+    await this.fetchNextScene();
+  },
+
+  // ---------------- 渲染 ----------------
+  render(){
+    const root = document.getElementById("phone");
+    if (this.screen === "loading") { root.innerHTML = ""; return; }
+    if (this.screen === "playerEdit") return this.renderPlayerEdit(root);
+    if (this.screen === "charEdit") return this.renderCharEdit(root);
+    if (this.screen === "story") return this.renderStory(root);
+    if (this.screen === "settings") return this.renderSettings(root);
+    if (this.screen === "memory") return this.renderMemory(root);
+    if (this.screen === "feed") return this.renderFeed(root);
+    return this.renderHome(root);
+  },
+
+  renderTypingOnly(){
+    if (this.screen === "story") this.renderStory(document.getElementById("phone"));
+  },
+
+  renderHome(root){
+    root.innerHTML = `
+      <div class="topbar">
+        <div class="title">通讯录</div>
+        <button class="back" id="settingsBtn" title="AI设置">⚙</button>
+      </div>
+      <div class="scroll" id="homeScroll"></div>
+      ${this.bottomTabsHtml("home")}
+    `;
+    root.querySelector("#settingsBtn").onclick = () => this.openSettings();
+    this.bindBottomTabs(root);
+    const scroll = root.querySelector("#homeScroll");
+
+    const pCard = document.createElement("div");
+    pCard.className = "player-card";
+    pCard.onclick = () => this.openPlayerEdit();
+    const av = document.createElement("div");
+    av.className = "avatar";
+    av.style.background = `hsl(${hashHue(this.profile.name)},55%,45%)`;
+    av.textContent = this.profile.name.slice(0,1);
+    const info = document.createElement("div");
+    info.className = "info";
+    const nm = document.createElement("div"); nm.className="name"; nm.textContent = this.profile.name + "（我）";
+    const meta = document.createElement("div"); meta.className="meta"; meta.textContent = `${this.profile.occupation} · ${calcAge(this.profile.birthDate)}岁`;
+    info.appendChild(nm); info.appendChild(meta);
+    const hint = document.createElement("div"); hint.className="edit-hint"; hint.textContent = "编辑";
+    pCard.appendChild(av); pCard.appendChild(info); pCard.appendChild(hint);
+    scroll.appendChild(pCard);
+
+    const label = document.createElement("div");
+    label.className = "section-label";
+    label.textContent = "年上";
+    scroll.appendChild(label);
+
+    if (this.roster.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-hint";
+      empty.textContent = "还没有年上呢，点击下方新建一个专属于你的角色吧。";
+      scroll.appendChild(empty);
+    }
+
+    this.roster.forEach(c => {
+      const stage = getStage(c.trust);
+      const card = document.createElement("div");
+      card.className = "char-card";
+      card.onclick = () => this.openStory(c.id);
+
+      const av2 = document.createElement("div");
+      av2.className = "avatar";
+      av2.style.background = `hsl(${hashHue(c.name)},50%,50%)`;
+      av2.style.width = "46px"; av2.style.height = "46px"; av2.style.fontSize="18px";
+      av2.textContent = c.name.slice(0,1);
+
+      const info2 = document.createElement("div");
+      info2.className = "info";
+      const row = document.createElement("div"); row.className = "name-row";
+      const nm2 = document.createElement("span"); nm2.className="name"; nm2.textContent = c.name;
+      row.appendChild(nm2);
+      if (c.isForeign) { const flag = document.createElement("span"); flag.className="flag"; flag.textContent="🌐"; row.appendChild(flag); }
+      const meta2 = document.createElement("div"); meta2.className="meta"; meta2.textContent = `${c.occupation} · ${calcAge(c.birthDate)}岁 · ${c.tags.slice(0,2).join("/")}`;
+      const stageTag = document.createElement("div"); stageTag.className="stage-tag"; stageTag.textContent = stage.label;
+      if (c.relTags && c.relTags.length) {
+        stageTag.textContent += "  ·  " + c.relTags.join(" / ");
+      }
+      const bar = document.createElement("div"); bar.className="trust-line";
+      const fill = document.createElement("div"); fill.className="trust-fill";
+      fill.style.width = Math.min(100, (c.trust / 150) * 100) + "%";
+      bar.appendChild(fill);
+
+      info2.appendChild(row); info2.appendChild(meta2); info2.appendChild(stageTag); info2.appendChild(bar);
+
+      const del = document.createElement("button");
+      del.className = "del-btn";
+      del.innerHTML = '✕';
+      del.onclick = (ev) => this.deleteChar(c.id, ev);
+
+      const memBtn = document.createElement("button");
+      memBtn.className = "del-btn";
+      memBtn.innerHTML = '☰';
+      memBtn.onclick = (ev) => { ev.stopPropagation(); this.openMemoryReview(c.id, "home"); };
+
+      card.appendChild(av2); card.appendChild(info2); card.appendChild(memBtn); card.appendChild(del);
+      scroll.appendChild(card);
+    });
+
+    const addBtn = document.createElement("div");
+    addBtn.className = "add-btn";
+    addBtn.textContent = "＋ 新建年上";
+    addBtn.onclick = () => this.openNewChar();
+    scroll.appendChild(addBtn);
+  },
+
+  renderRelTagPicker(container, selected){
+    container.innerHTML = "";
+    if (!this.tempRelRoles) this.tempRelRoles = {};
+    const chipEls = {};
+
+    const details = document.createElement("details");
+    details.className = "tag-dropdown";
+    const summary = document.createElement("summary");
+    const updateSummary = () => {
+      summary.textContent = selected.length ? ("关系原型：" + selected.join("、")) : "选择关系原型标签（最多2个） ▾";
+    };
+    updateSummary();
+    details.appendChild(summary);
+
+    REL_TAG_GROUPS.forEach(g => {
+      const groupLabel = document.createElement("div");
+      groupLabel.style.cssText = "font-size:10.5px;color:var(--muted);margin:8px 0 4px 0;";
+      groupLabel.textContent = g.group;
+      details.appendChild(groupLabel);
+
+      const wrap = document.createElement("div");
+      wrap.className = "tag-wrap";
+      wrap.style.marginBottom = "4px";
+      g.tags.forEach(t => {
+        const chip = document.createElement("div");
+        chip.className = "tag-chip" + (selected.includes(t) ? " active" : "");
+        chip.textContent = t;
+        chipEls[t] = chip;
+        chip.onclick = () => {
+          const i = selected.indexOf(t);
+          if (i >= 0) {
+            selected.splice(i, 1);
+            chip.classList.remove("active");
+            delete this.tempRelRoles[t];
+          } else {
+            if (selected.length >= MAX_REL_TAGS) {
+              const removed = selected.shift();
+              if (chipEls[removed]) chipEls[removed].classList.remove("active");
+              delete this.tempRelRoles[removed];
+            }
+            selected.push(t);
+            chip.classList.add("active");
+          }
+          updateSummary();
+          renderRoleBlock();
+        };
+        wrap.appendChild(chip);
+      });
+      details.appendChild(wrap);
+    });
+    container.appendChild(details);
+
+    const roleBlock = document.createElement("div");
+    roleBlock.style.marginTop = "8px";
+    container.appendChild(roleBlock);
+
+    const renderRoleBlock = () => {
+      roleBlock.innerHTML = "";
+      selected.filter(t => POWER_PAIR_TAGS[t]).forEach(t => {
+        const pair = POWER_PAIR_TAGS[t];
+        if (this.tempRelRoles[t] === undefined) this.tempRelRoles[t] = true;
+        const row = document.createElement("div");
+        row.style.cssText = "background:var(--bubble);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:6px;font-size:12.5px;";
+        const label = document.createElement("div");
+        label.style.cssText = "color:var(--muted);margin-bottom:6px;";
+        label.textContent = "「" + t + "」谁扮演哪个角色？";
+        row.appendChild(label);
+        const btnRow = document.createElement("div");
+        btnRow.style.cssText = "display:flex;gap:8px;";
+        const optA = document.createElement("div");
+        optA.className = "tag-chip" + (this.tempRelRoles[t] ? " active" : "");
+        optA.textContent = "TA是" + pair[0] + "，你是" + pair[1];
+        optA.onclick = () => { this.tempRelRoles[t] = true; renderRoleBlock(); };
+        const optB = document.createElement("div");
+        optB.className = "tag-chip" + (!this.tempRelRoles[t] ? " active" : "");
+        optB.textContent = "你是" + pair[0] + "，TA是" + pair[1];
+        optB.onclick = () => { this.tempRelRoles[t] = false; renderRoleBlock(); };
+        btnRow.appendChild(optA); btnRow.appendChild(optB);
+        row.appendChild(btnRow);
+        roleBlock.appendChild(row);
+      });
+    };
+    renderRoleBlock();
+  },
+
+  renderTagPicker(container, selected){
+    container.innerHTML = "";
+    const details = document.createElement("details");
+    details.className = "tag-dropdown";
+    const summary = document.createElement("summary");
+    const updateSummary = () => {
+      summary.textContent = selected.length ? ("性格标签：" + selected.join("、")) : "选择性格标签 ▾";
+    };
+    updateSummary();
+    details.appendChild(summary);
+    const wrap = document.createElement("div");
+    wrap.className = "tag-wrap";
+    TAGS.forEach(t => {
+      const chip = document.createElement("div");
+      chip.className = "tag-chip" + (selected.includes(t) ? " active" : "");
+      chip.textContent = t;
+      chip.onclick = () => {
+        const i = selected.indexOf(t);
+        if (i>=0) { selected.splice(i,1); chip.classList.remove("active"); }
+        else { selected.push(t); chip.classList.add("active"); }
+        updateSummary();
+      };
+      wrap.appendChild(chip);
+    });
+    details.appendChild(wrap);
+    container.appendChild(details);
+  },
+
+  renderPlayerEdit(root){
+    const p = this.profile || { name:"", gender:"女", birthDate:"", occupation:"", appearance:"", tags:[], personalityText:"", speechStyle:"" };
+    root.innerHTML = `
+      <div class="topbar">
+        <button class="back" id="backBtn">←</button>
+        <div><div class="title">我的人设</div></div>
+      </div>
+      <div class="scroll"><div class="form-wrap">
+        <div class="field"><label>姓名</label><input id="f_name" type="text" value="${p.name.replace(/"/g,"&quot;")}"></div>
+        <div class="field row2">
+          <div><label>性别</label>
+            <select id="f_gender">
+              <option ${p.gender==="女"?"selected":""}>女</option>
+              <option ${p.gender==="男"?"selected":""}>男</option>
+              <option ${p.gender==="其他"?"selected":""}>其他</option>
+            </select>
+          </div>
+          <div><label>出生日期</label><input id="f_birth" type="date" value="${p.birthDate||""}"></div>
+        </div>
+        <div class="field"><label>职业</label><input id="f_occupation" type="text" value="${p.occupation.replace(/"/g,"&quot;")}"></div>
+        <div class="field"><label>外表风格</label><textarea id="f_appearance" placeholder="比如：干练短发，常穿简约白衬衫">${p.appearance}</textarea></div>
+        <div class="field"><label>性格标签（多选）</label><div id="tagPicker"></div></div>
+        <div class="field"><label>性格补充说明（选填）</label><textarea id="f_ptext" placeholder="随意补充，比如：外冷内热，习惯用行动代替表白">${p.personalityText}</textarea></div>
+        <div class="field"><label>说话方式（选填）</label><textarea id="f_speech" placeholder="比如：习惯反问，喜欢用职场黑话">${p.speechStyle}</textarea></div>
+        <button class="primary-btn" id="saveBtn">保存</button>
+      </div></div>
+    `;
+    this.tempTags = p.tags ? [...p.tags] : [];
+    this.renderTagPicker(root.querySelector("#tagPicker"), this.tempTags);
+
+    root.querySelector("#backBtn").onclick = () => { if (this.profile) this.goHome(); };
+    root.querySelector("#saveBtn").onclick = async () => {
+      const name = root.querySelector("#f_name").value.trim();
+      if (!name) { alert("请填写姓名"); return; }
+      const newP = {
+        name,
+        gender: root.querySelector("#f_gender").value,
+        birthDate: root.querySelector("#f_birth").value,
+        occupation: root.querySelector("#f_occupation").value.trim() || "自由职业",
+        appearance: root.querySelector("#f_appearance").value.trim(),
+        tags: this.tempTags,
+        personalityText: root.querySelector("#f_ptext").value.trim(),
+        speechStyle: root.querySelector("#f_speech").value.trim()
+      };
+      await this.saveProfile(newP);
+      this.goHome();
+    };
+  },
+
+  renderCharEdit(root){
+    const editing = this.editingCharId ? this.roster.find(c=>c.id===this.editingCharId) : null;
+    const c = editing || { name:"", gender:"男", birthDate:"", occupation:"", appearance:"", tags:[], relTags:[], personalityText:"", speechStyle:"", isForeign:false, langBg:"", mixRatio:30 };
+
+    root.innerHTML = `
+      <div class="topbar">
+        <button class="back" id="backBtn">←</button>
+        <div><div class="title">${editing ? "编辑年上" : "新建年上"}</div></div>
+      </div>
+      <div class="scroll"><div class="form-wrap">
+        <div class="field"><label>姓名</label><input id="c_name" type="text" value="${c.name.replace(/"/g,"&quot;")}"></div>
+        <div class="field row2">
+          <div><label>性别</label>
+            <select id="c_gender">
+              <option ${c.gender==="男"?"selected":""}>男</option>
+              <option ${c.gender==="女"?"selected":""}>女</option>
+              <option ${c.gender==="其他"?"selected":""}>其他</option>
+            </select>
+          </div>
+          <div><label>出生日期</label><input id="c_birth" type="date" value="${c.birthDate||""}"></div>
+        </div>
+        <div class="field"><label>职业</label><input id="c_occupation" type="text" value="${c.occupation.replace(/"/g,"&quot;")}" placeholder="比如：急诊科医生、餐厅主理人、自由摄影师"></div>
+        <div class="field"><label>外表风格</label><textarea id="c_appearance" placeholder="比如：常年一身黑，手上总有淡淡的消毒水味">${c.appearance}</textarea></div>
+        <div class="field"><label>剧情种子（选填）——你们是怎么认识的，或者想让开场是什么样</label><textarea id="c_seed" placeholder="不写的话由AI自由设定初遇场景">${c.seed || ""}</textarea></div>
+        <div class="field"><label>性格标签（多选）</label><div id="tagPicker"></div></div>
+        <div class="field"><label>关系原型标签（最多选2个，决定关系基调）</label><div id="relTagPicker"></div></div>
+        <div class="field"><label>性格补充说明（选填）</label><textarea id="c_ptext" placeholder="随意补充，比如：嘴上说着麻烦，身体却很诚实">${c.personalityText}</textarea></div>
+        <div class="field"><label>说话方式（选填）</label><textarea id="c_speech" placeholder="比如：语速慢，喜欢反问句">${c.speechStyle}</textarea></div>
+
+        <div class="field">
+          <label>相处进度（当前关系发展到哪个阶段，可随时手动调整）</label>
+          <select id="c_stage">
+            ${STAGES.map(s => `<option value="${s.key}" ${getStage(c.trust).key===s.key?"selected":""}>${s.label}</option>`).join("")}
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="toggle-row">
+            <label style="margin-bottom:0;">外国角色（中英混搭）</label>
+            <label class="switch"><input type="checkbox" id="c_foreign" ${c.isForeign?"checked":""}><span class="track"></span></label>
+          </div>
+        </div>
+        <div id="foreignBlock" class="${c.isForeign?"":"hidden"}">
+          <div class="field"><label>语言背景（选填）</label><input id="c_langbg" type="text" value="${(c.langBg||"").replace(/"/g,"&quot;")}" placeholder="比如：在法国长大的ABC、刚学中文半年的美国人"></div>
+          <div class="field">
+            <label>中英混搭程度：<span id="mixVal">${c.mixRatio}</span>%</label>
+            <div class="slider-wrap">
+              <input type="range" id="c_mix" min="0" max="100" value="${c.mixRatio}">
+              <div class="slider-labels"><span>几乎全中文</span><span>大量英文</span></div>
+            </div>
+          </div>
+        </div>
+
+        <button class="primary-btn" id="saveBtn">保存</button>
+        ${editing ? '<button class="ghost-btn" id="cancelBtn">取消</button>' : ''}
+      </div></div>
+    `;
+    this.tempTags = c.tags ? [...c.tags] : [];
+    this.renderTagPicker(root.querySelector("#tagPicker"), this.tempTags);
+    this.tempRelTags = c.relTags ? [...c.relTags] : [];
+    this.tempRelRoles = c.relRoles ? { ...c.relRoles } : {};
+    this.renderRelTagPicker(root.querySelector("#relTagPicker"), this.tempRelTags);
+
+    root.querySelector("#backBtn").onclick = () => this.goHome();
+    const cancelBtn = root.querySelector("#cancelBtn");
+    if (cancelBtn) cancelBtn.onclick = () => this.goHome();
+
+    root.querySelector("#c_foreign").onchange = (e) => {
+      root.querySelector("#foreignBlock").classList.toggle("hidden", !e.target.checked);
+    };
+    root.querySelector("#c_mix").oninput = (e) => {
+      root.querySelector("#mixVal").textContent = e.target.value;
+    };
+
+    root.querySelector("#saveBtn").onclick = async () => {
+      const name = root.querySelector("#c_name").value.trim();
+      if (!name) { alert("请填写姓名"); return; }
+      const data = {
+        id: editing ? editing.id : ("char_" + Date.now()),
+        name,
+        gender: root.querySelector("#c_gender").value,
+        birthDate: root.querySelector("#c_birth").value,
+        occupation: root.querySelector("#c_occupation").value.trim() || "自由职业",
+        appearance: root.querySelector("#c_appearance").value.trim(),
+        seed: root.querySelector("#c_seed").value.trim(),
+        tags: this.tempTags,
+        relTags: this.tempRelTags,
+        relRoles: Object.fromEntries(Object.entries(this.tempRelRoles || {}).filter(([k]) => this.tempRelTags.includes(k))),
+        personalityText: root.querySelector("#c_ptext").value.trim(),
+        speechStyle: root.querySelector("#c_speech").value.trim(),
+        isForeign: root.querySelector("#c_foreign").checked,
+        langBg: root.querySelector("#c_langbg").value.trim(),
+        mixRatio: parseInt(root.querySelector("#c_mix").value) || 0,
+        trust: (STAGES.find(s => s.key === root.querySelector("#c_stage").value) || STAGES[0]).min,
+        memory: editing ? editing.memory : []
+      };
+      if (editing) {
+        const idx = this.roster.findIndex(x=>x.id===editing.id);
+        this.roster[idx] = data;
+      } else {
+        this.roster.push(data);
+      }
+      await this.saveRoster();
+      this.goHome();
+    };
+  },
+
+  renderSettings(root){
+    const s = this.aiSettings || { provider:"builtin", apiKey:"", baseUrl:"", model:"" };
+    const providerOptions = Object.keys(PROVIDER_PRESETS).map(key =>
+      `<option value="${key}" ${s.provider===key?"selected":""}>${PROVIDER_PRESETS[key].label}</option>`
+    ).join("");
+
+    root.innerHTML = `
+      <div class="topbar">
+        <button class="back" id="backBtn">←</button>
+        <div><div class="title">AI 设置</div></div>
+      </div>
+      <div class="scroll"><div class="form-wrap">
+        <div class="field">
+          <label>剧情生成使用的AI服务商</label>
+          <select id="s_provider">${providerOptions}</select>
+        </div>
+        <div id="extBlock">
+          <div class="field"><label>接口地址（Base URL）</label><input id="s_baseurl" type="text" value="${(s.baseUrl||"").replace(/"/g,"&quot;")}" placeholder="https://api.xxx.com/v1/chat/completions"></div>
+          <div class="field"><label>模型名称</label><input id="s_model" type="text" value="${(s.model||"").replace(/"/g,"&quot;")}" placeholder="比如 deepseek-chat"></div>
+          <div class="field"><label>API Key</label><input id="s_apikey" type="text" value="${(s.apiKey||"").replace(/"/g,"&quot;")}" placeholder="粘贴你的API Key"></div>
+        </div>
+        <button class="ghost-btn" id="testBtn" style="margin-top:0;">测试连接</button>
+        <div id="testMsg" style="font-size:12.5px; margin-top:8px; min-height:16px;"></div>
+        <button class="primary-btn" id="saveBtn" style="margin-top:16px;">保存设置</button>
+        <p style="font-size:11.5px; color:var(--muted); margin-top:14px; line-height:1.7;">
+          提示：这个游戏是纯前端跑在你浏览器里的，没有后端服务器，所以Key是明文存在你本机浏览器里的（不会传给我或Anthropic），也不会跨设备同步。部分服务商可能不支持浏览器直接调用（CORS限制），如果测试连接失败，大概率是这个原因。
+        </p>
+
+        <div style="height:1px;background:var(--line);margin:22px 0;"></div>
+        <div class="section-label" style="margin:0 0 10px 0;">数据备份</div>
+        <p style="font-size:11.5px; color:var(--muted); margin-bottom:12px; line-height:1.7;">
+          所有数据只存在这台设备的浏览器里，清缓存或换设备会全部丢失。建议定期导出备份一份文件保存好。
+        </p>
+        <button class="ghost-btn" id="exportBtn" style="margin-top:0;">导出备份文件</button>
+        <button class="ghost-btn" id="importBtn">导入备份文件</button>
+        <input type="file" id="importFile" accept="application/json" class="hidden">
+        <div id="backupMsg" style="font-size:12.5px; margin-top:8px; min-height:16px;"></div>
+      </div></div>
+    `;
+
+    const extBlock = root.querySelector("#extBlock");
+    const providerSel = root.querySelector("#s_provider");
+    const toggleExtBlock = () => {
+      extBlock.classList.toggle("hidden", providerSel.value === "builtin");
+    };
+    toggleExtBlock();
+
+    providerSel.onchange = () => {
+      const preset = PROVIDER_PRESETS[providerSel.value];
+      if (providerSel.value !== "custom" && providerSel.value !== "builtin") {
+        root.querySelector("#s_baseurl").value = preset.baseUrl;
+        root.querySelector("#s_model").value = preset.model;
+      }
+      toggleExtBlock();
+    };
+
+    root.querySelector("#backBtn").onclick = () => this.goHome();
+
+    root.querySelector("#testBtn").onclick = () => {
+      const tempSettings = {
+        provider: providerSel.value,
+        baseUrl: root.querySelector("#s_baseurl").value.trim(),
+        model: root.querySelector("#s_model").value.trim(),
+        apiKey: root.querySelector("#s_apikey").value.trim()
+      };
+      this.testConnection(root, tempSettings);
+    };
+
+    root.querySelector("#saveBtn").onclick = async () => {
+      const newSettings = {
+        provider: providerSel.value,
+        baseUrl: root.querySelector("#s_baseurl").value.trim(),
+        model: root.querySelector("#s_model").value.trim(),
+        apiKey: root.querySelector("#s_apikey").value.trim()
+      };
+      await this.saveAiSettings(newSettings);
+      this.goHome();
+    };
+
+    root.querySelector("#exportBtn").onclick = () => this.exportBackup(root);
+    root.querySelector("#importBtn").onclick = () => root.querySelector("#importFile").click();
+    root.querySelector("#importFile").onchange = (e) => {
+      if (e.target.files && e.target.files[0]) this.importBackup(e.target.files[0], root);
+    };
+  },
+
+  openMemoryReview(charId, fromScreen){
+    this.memoryCharId = charId;
+    this.memoryPrevScreen = fromScreen || "home";
+    this.screen = "memory";
+    this.render();
+  },
+
+  renderMemory(root){
+    const char = this.roster.find(c=>c.id===this.memoryCharId);
+    if (!char) { this.goHome(); return; }
+    root.innerHTML = `
+      <div class="topbar">
+        <button class="back" id="backBtn">←</button>
+        <div><div class="title">${char.name} 的记忆</div><div class="sub">AI会参考这些内容写剧情</div></div>
+      </div>
+      <div class="scroll"><div class="form-wrap" id="memList"></div></div>
+    `;
+    root.querySelector("#backBtn").onclick = () => {
+      if (this.memoryPrevScreen === "story") { this.screen = "story"; this.render(); }
+      else this.goHome();
+    };
+    const list = root.querySelector("#memList");
+    if (!char.memory || char.memory.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-hint";
+      empty.style.margin = "10px 0";
+      empty.textContent = "还没有记住任何关键节点，多聊几轮之后AI会自动记下值得记住的事情。";
+      list.appendChild(empty);
+      return;
+    }
+    char.memory.forEach((m, idx) => {
+      const item = document.createElement("div");
+      item.style.cssText = "display:flex;align-items:flex-start;gap:10px;background:var(--bubble);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;";
+      const txt = document.createElement("div");
+      txt.style.cssText = "flex:1;font-size:13.5px;line-height:1.6;color:var(--ink);";
+      txt.textContent = m;
+      const del = document.createElement("button");
+      del.innerHTML = '✕';
+      del.style.cssText = "background:none;border:none;color:var(--muted);cursor:pointer;padding:2px;";
+      del.onclick = async () => {
+        char.memory.splice(idx, 1);
+        await this.saveRoster();
+        this.renderMemory(root);
+      };
+      item.appendChild(txt); item.appendChild(del);
+      list.appendChild(item);
+    });
+  },
+
+  startEditMsg(idx, containerEl){
+    const msg = this.thread[idx];
+    containerEl.innerHTML = "";
+    containerEl.className = "msg-row editing";
+    const ta = document.createElement("textarea");
+    ta.className = "edit-textarea";
+    ta.value = msg.text;
+    const btnRow = document.createElement("div");
+    btnRow.className = "edit-btn-row";
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "edit-save-btn";
+    saveBtn.textContent = "保存";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "edit-cancel-btn";
+    cancelBtn.textContent = "取消";
+    saveBtn.onclick = async () => {
+      this.thread[idx].text = ta.value;
+      await this.saveConversation(this.activeCharId);
+      this.render();
+    };
+    cancelBtn.onclick = () => this.render();
+    btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
+
+    const wrap = document.createElement("div");
+    wrap.style.width = "100%";
+    wrap.appendChild(ta); wrap.appendChild(btnRow);
+    containerEl.appendChild(wrap);
+    ta.focus();
+  },
+
+  exportNovel(char){
+    const playerName = this.profile ? this.profile.name : "你";
+    const lines = [];
+    lines.push("# 与" + char.name + "的故事");
+    lines.push("");
+    lines.push("> 导出于 " + new Date().toLocaleString());
+    lines.push("");
+    this.thread.forEach(msg => {
+      if (msg.type === "narration") {
+        lines.push(msg.text);
+      } else if (msg.type === "dialogue") {
+        lines.push("**" + char.name + "**：" + msg.text);
+      } else if (msg.type === "system") {
+        lines.push("> " + msg.text);
+      } else {
+        lines.push("**" + playerName + "**：" + msg.text);
+      }
+      lines.push("");
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "与" + char.name + "的故事.md";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  // ---------------- 动态广场 ----------------
+  async triggerPublicIncident(char, incidentText){
+    try {
+      const others = this.roster.filter(c => c.id !== char.id);
+      const othersText = others.length ? others.map(c => this.charSummaryForFeed(c)).join("\n") : "（无其他年上）";
+      const prompt = `一件可能会被传到网上的事情刚刚发生。
+涉及的角色：${this.charSummaryForFeed(char)}
+发生的事（外人看到的画面/内容）：${incidentText}
+
+玩家通讯录里的其他年上角色（如果情境合适，其中有人刷到后可能会有情绪反应——比如吃醋、看戏、担心，没有关系就不用出现）：
+${othersText}
+
+请生成一条对应的社交动态帖子（模拟真实社交平台上的爆料/吃瓜内容，作者是路人/目击者/爆料账号，自己起网名），以及一个2-6条的评论区讨论：
+- 如果涉及的角色是公众人物或带有粉丝相关的关系原型标签，评论区应该有粉丝的反应——可能尖叫、可能骂"新欢"、可能送祝福，情绪不必统一，可以吵起来。
+- 如果只是普通人被拍到，就是路人吃瓜/八卦网友的反应，可以互相接话、玩梗。
+- 如果通讯录里其他角色刷到后会有反应，让TA也出现在评论区，authorType填"char"并给出charId；评论如果是接着之前某条评论说的，用replyToName标注。
+
+请只输出如下格式的JSON（不要有其它任何文字）：
+{"post":{"authorName":"...","text":"..."},"comments":[{"authorType":"char或passerby","charId":"仅char时填","authorName":"...","text":"...","replyToName":""}]}`;
+      let raw = await this.callAI(prompt);
+      raw = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(raw);
+      if (!parsed.post || !parsed.post.text) return;
+      const comments = (parsed.comments || []).map(cm => this.parseFeedComment(cm)).filter(Boolean);
+      this.feed.unshift({
+        id: "post_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+        authorType: "passerby",
+        charId: null,
+        authorName: parsed.post.authorName || "吃瓜网友",
+        text: parsed.post.text,
+        createdAt: new Date().toISOString(),
+        liked: false,
+        comments
+      });
+      await this.saveFeed();
+    } catch(e) {
+      console.error(e);
+    }
+  },
+
+  charSummaryForFeed(c){
+    const stage = getStage(c.trust).label;
+    const memoryText = (c.memory && c.memory.length) ? c.memory.slice(-3).join("；") : "无";
+    const langNote = c.isForeign ? `（中英混搭程度${c.mixRatio}%）` : "";
+    return `- id:${c.id}｜${c.name}｜${c.gender}｜${calcAge(c.birthDate)}岁｜${c.occupation}｜性格:${c.tags.join("、")}｜关系原型:${(c.relTags||[]).join("、")||"无"}｜说话方式:${c.speechStyle||"无"}${langNote}｜当前关系阶段:${stage}｜近期记忆:${memoryText}`;
+  },
+
+  parseFeedComment(cm){
+    if (!cm || !cm.text) return null;
+    const authorType = cm.authorType === "char" ? "char" : "passerby";
+    let charId = null, authorName = cm.authorName || "网友";
+    if (authorType === "char") {
+      const char = this.roster.find(c => c.id === cm.charId);
+      if (!char) return null;
+      charId = char.id; authorName = char.name;
+    }
+    return {
+      id: "cm_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+      authorType, charId, authorName,
+      text: cm.text,
+      replyToName: cm.replyToName || "",
+      createdAt: new Date().toISOString()
+    };
+  },
+
+  async refreshFeed(){
+    if (this.feedBusy) return;
+    this.feedBusy = true;
+    this.render();
+    try {
+      const roster = this.roster;
+      const profileText = this.profile ? `${this.profile.name}（${this.profile.gender}，${calcAge(this.profile.birthDate)}岁，${this.profile.occupation}）` : "玩家";
+      const rosterText = roster.length ? roster.map(c => this.charSummaryForFeed(c)).join("\n") : "（玩家通讯录里还没有年上）";
+      const prompt = `你在为一个类似微博的社交动态广场生成内容，风格要像真实社交平台：有认识的人，也有一堆互不相识、爱抬杠爱玩梗的路人网友。玩家人设：${profileText}
+玩家通讯录里的年上角色列表：
+${rosterText}
+
+请生成2-4条新动态，类型混合：
+- 部分动态来自上面列出的年上角色（authorType填"char"并给出charId），内容是他们的日常生活/心情，不必跟玩家相关；如果某角色带"在外出轨"相关标签，动态里可以有一点若有若无的心虚感或对不上的细节，不用说破。
+- 部分动态来自完全无关的路人网友（authorType填"passerby"，自己起一个网名放在authorName），内容可以是热梗、抱怨、八卦、无意义碎碎念，营造真实社交平台的氛围感。
+
+为每条动态配一个2-6条的评论区讨论，模拟论坛"盖楼"效果——网友之间要互相接话、抬杠、玩梗、起哄，不是各说各话；同一动态下可以出现好几个不同网名的路人，也可以让某个年上角色刷到评论（如果符合性格）。每条评论如果是接着某一条之前的评论说的，用replyToName标注那条评论作者的名字/网名；如果只是评论原动态本身，replyToName留空。
+
+请只输出如下格式的JSON（不要有其它任何文字）：
+{"posts":[{"authorType":"char或passerby","charId":"仅char时填","authorName":"...","text":"...","comments":[{"authorType":"char或passerby","charId":"仅char时填","authorName":"...","text":"...","replyToName":""}]}]}`;
+      let raw = await this.callAI(prompt);
+      raw = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(raw);
+      const now = new Date().toISOString();
+      (parsed.posts || []).forEach(p => {
+        if (!p.text) return;
+        let authorType = p.authorType === "char" ? "char" : "passerby";
+        let charId = null, authorName = p.authorName || "网友";
+        if (authorType === "char") {
+          const char = this.roster.find(c => c.id === p.charId);
+          if (!char) return;
+          charId = char.id; authorName = char.name;
+        }
+        const comments = (p.comments || []).map(cm => this.parseFeedComment(cm)).filter(Boolean);
+        this.feed.unshift({
+          id: "post_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+          authorType, charId, authorName,
+          text: p.text,
+          createdAt: now,
+          liked: false,
+          comments
+        });
+      });
+      await this.saveFeed();
+    } catch(e) {
+      console.error(e);
+    }
+    this.feedBusy = false;
+    this.render();
+  },
+
+  async postAsPlayer(text){
+    const trimmed = (text || "").trim();
+    if (!trimmed || this.feedBusy) return;
+    const playerName = this.profile ? this.profile.name : "我";
+    const post = {
+      id: "post_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+      authorType: "player", charId: null, authorName: playerName,
+      text: trimmed,
+      createdAt: new Date().toISOString(),
+      liked: false,
+      comments: []
+    };
+    this.feed.unshift(post);
+    await this.saveFeed();
+    this.render();
+
+    this.feedBusy = true;
+    this.render();
+    try {
+      const profileText = this.profile ? `${this.profile.name}（${this.profile.gender}，${calcAge(this.profile.birthDate)}岁，${this.profile.occupation}）` : "玩家";
+      const rosterText = this.roster.length ? this.roster.map(c => this.charSummaryForFeed(c)).join("\n") : "（玩家通讯录里还没有年上）";
+      const prompt = `玩家在社交动态广场发了一条动态。玩家人设：${profileText}
+玩家发的内容：${trimmed}
+
+玩家通讯录里的年上角色列表：
+${rosterText}
+
+请生成这条动态下的评论区讨论（2-6条），混合两种来源：
+- 通讯录里的年上角色：只有符合当前关系阶段和性格的人才会开口（关系还很浅的人可能压根不评论），authorType填"char"并给出charId。
+- 完全无关的路人网友：自己起网名，authorType填"passerby"，可以互相接话、玩梗、抬杠，模拟论坛盖楼效果。
+
+如果评论是接着同一动态下之前某条评论说的，用replyToName标注那条评论作者的名字/网名；如果只是评论原动态，replyToName留空。
+
+请只输出如下格式的JSON（不要有其它任何文字）：
+{"comments":[{"authorType":"char或passerby","charId":"仅char时填","authorName":"...","text":"...","replyToName":""}]}`;
+      let raw = await this.callAI(prompt);
+      raw = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(raw);
+      const target = this.feed.find(p => p.id === post.id);
+      if (target) {
+        (parsed.comments || []).forEach(cm => {
+          const parsed2 = this.parseFeedComment(cm);
+          if (parsed2) target.comments.push(parsed2);
+        });
+        await this.saveFeed();
+      }
+    } catch(e) {
+      console.error(e);
+    }
+    this.feedBusy = false;
+    this.render();
+  },
+
+  async addFeedComment(postId, text){
+    const trimmed = (text || "").trim();
+    if (!trimmed || this.feedBusy) return;
+    const post = this.feed.find(p => p.id === postId);
+    if (!post) return;
+    const playerName = this.profile ? this.profile.name : "我";
+    post.comments.push({
+      id: "cm_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
+      authorType: "player", charId: null, authorName: playerName,
+      text: trimmed,
+      replyToName: "",
+      createdAt: new Date().toISOString()
+    });
+    await this.saveFeed();
+    this.render();
+
+    this.feedBusy = true;
+    this.render();
+    try {
+      const existingThread = post.comments.map(c => (c.replyToName ? `（回复${c.replyToName}）` : "") + c.authorName + "：" + c.text).join("\n");
+      const rosterText = this.roster.length ? this.roster.map(c => this.charSummaryForFeed(c)).join("\n") : "（无）";
+      const prompt = `社交动态广场里的一条动态正在被讨论。
+动态原文：${post.text}
+目前评论区讨论（按顺序）：
+${existingThread}
+
+玩家通讯录里的年上角色列表（如果情境合适可以有人插一句，情境不合适就不用出现）：
+${rosterText}
+
+请续写接下来的1-3条评论，继续这段讨论——可以是路人接话/玩梗/抬杠，也可以是通讯录角色的反应。每条标注authorType("char"或"passerby")、charId（仅char时需要）、authorName（网名或角色名）、text、以及可选的replyToName（接着哪条之前的评论说，不接就留空）。
+
+请只输出如下格式的JSON（不要有其它任何文字）：
+{"comments":[{"authorType":"char或passerby","charId":"仅char时填","authorName":"...","text":"...","replyToName":""}]}`;
+      let raw = await this.callAI(prompt);
+      raw = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(raw);
+      (parsed.comments || []).forEach(cm => {
+        const parsed2 = this.parseFeedComment(cm);
+        if (parsed2) post.comments.push(parsed2);
+      });
+      await this.saveFeed();
+    } catch(e) {
+      console.error(e);
+    }
+    this.feedBusy = false;
+    this.render();
+  },
+
+  async toggleLike(postId){
+    const post = this.feed.find(p => p.id === postId);
+    if (!post) return;
+    post.liked = !post.liked;
+    await this.saveFeed();
+    this.render();
+  },
+
+  formatFeedTime(iso){
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "刚刚";
+    if (diffMin < 60) return diffMin + "分钟前";
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return diffH + "小时前";
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return diffD + "天前";
+    return d.toLocaleDateString();
+  },
+
+  renderStory(root){
+    const char = this.roster.find(c=>c.id===this.activeCharId);
+    if (!char) { this.goHome(); return; }
+    const stage = getStage(char.trust);
+
+    root.innerHTML = `
+      <div class="topbar">
+        <button class="back" id="backBtn">←</button>
+        <div style="flex:1;">
+          <div class="title">${char.name}</div>
+          <div class="sub">${stage.label}</div>
+        </div>
+        <button class="back" id="exportNovelBtn" title="导出成小说">⬇</button>
+        <button class="back" id="memBtn" title="查看记忆">☰</button>
+        <button class="back" id="resetBtn" title="重新开始这段对话">↺</button>
+      </div>
+      <div class="scroll" id="threadScroll"><div class="thread" id="threadInner"></div></div>
+      <div class="choices-panel" id="choicesPanel"></div>
+    `;
+    root.querySelector("#backBtn").onclick = () => this.goHome();
+    root.querySelector("#memBtn").onclick = () => this.openMemoryReview(char.id, "story");
+    root.querySelector("#exportNovelBtn").onclick = () => this.exportNovel(char);
+    root.querySelector("#resetBtn").onclick = () => {
+      if (confirm("确定要清空和" + char.name + "的对话记录，重新开始吗？（好感度和记忆不会重置）")) {
+        this.resetConversation();
+      }
+    };
+
+    const inner = root.querySelector("#threadInner");
+    let lastStage = null;
+    this.thread.forEach((msg, idx) => {
+      if (msg.stageLabel && msg.stageLabel !== lastStage) {
+        const pill = document.createElement("div");
+        pill.className = "stage-pill";
+        pill.textContent = msg.stageLabel;
+        inner.appendChild(pill);
+        lastStage = msg.stageLabel;
+      }
+      if (msg.type === "narration") {
+        const row = document.createElement("div");
+        row.className = "msg-row";
+        const b = document.createElement("div");
+        b.className = "narration-block";
+        b.textContent = msg.text;
+        const edit = document.createElement("button");
+        edit.className = "edit-btn";
+        edit.innerHTML = '✎';
+        edit.onclick = () => this.startEditMsg(idx, row);
+        row.appendChild(b); row.appendChild(edit);
+        inner.appendChild(row);
+      } else if (msg.type === "dialogue") {
+        const wrap = document.createElement("div");
+        wrap.className = "dialogue-wrap";
+        const tag = document.createElement("div");
+        tag.className = "dialogue-tag";
+        tag.textContent = char.name;
+        const row = document.createElement("div");
+        row.className = "msg-row";
+        const b = document.createElement("div");
+        b.className = "bubble-dialogue";
+        b.textContent = msg.text;
+        const edit = document.createElement("button");
+        edit.className = "edit-btn";
+        edit.innerHTML = '✎';
+        edit.onclick = () => this.startEditMsg(idx, row);
+        row.appendChild(b); row.appendChild(edit);
+        wrap.appendChild(tag); wrap.appendChild(row);
+        inner.appendChild(wrap);
+      } else if (msg.type === "system") {
+        const pill = document.createElement("div");
+        pill.className = "system-pill";
+        pill.textContent = msg.text + "  去看看 →";
+        pill.onclick = () => this.openFeed();
+        inner.appendChild(pill);
+      } else {
+        const row = document.createElement("div");
+        row.className = "msg-row user-row";
+        const edit = document.createElement("button");
+        edit.className = "edit-btn";
+        edit.innerHTML = '✎';
+        edit.onclick = () => this.startEditMsg(idx, row);
+        const b = document.createElement("div");
+        b.className = "bubble-user";
+        b.textContent = msg.text;
+        row.appendChild(edit); row.appendChild(b);
+        inner.appendChild(row);
+      }
+    });
+
+    if (this.waitingReply) {
+      const t = document.createElement("div");
+      t.className = "typing";
+      t.innerHTML = "<span></span><span></span><span></span>";
+      inner.appendChild(t);
+    }
+
+    const panel = root.querySelector("#choicesPanel");
+    if (this.fetchError) {
+      const box = document.createElement("div");
+      box.className = "error-box";
+      box.style.margin = "0";
+      box.innerHTML = "生成失败了，可能是网络或接口的问题。";
+      const btn = document.createElement("button");
+      btn.textContent = "重试";
+      btn.onclick = () => this.retryFetch();
+      box.appendChild(btn);
+      panel.appendChild(box);
+    } else if (!this.waitingReply && this.currentChoices) {
+      const regenRow = document.createElement("div");
+      regenRow.style.display = "flex";
+      regenRow.style.justifyContent = "flex-end";
+      regenRow.style.marginBottom = "2px";
+      const regenBtn = document.createElement("button");
+      regenBtn.textContent = "↻ 换一种写法";
+      regenBtn.style.cssText = "background:none;border:none;color:var(--muted);font-size:11.5px;cursor:pointer;padding:4px 6px;";
+      regenBtn.onclick = () => this.regenerateLast();
+      regenRow.appendChild(regenBtn);
+      panel.appendChild(regenRow);
+
+      this.currentChoices.forEach((c, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "choice-btn";
+        const ct = document.createElement("span"); ct.className="ctext";
+        let label = "";
+        if (c.action) label += c.action;
+        if (c.action && c.line) label += "　";
+        if (c.line) label += "「" + c.line + "」";
+        ct.textContent = label;
+        const cs = document.createElement("span"); cs.className="csub"; cs.textContent = "内心：" + c.subtext;
+        btn.appendChild(ct); btn.appendChild(cs);
+        btn.onclick = () => this.pickChoice(idx);
+        panel.appendChild(btn);
+      });
+
+      const customRow = document.createElement("div");
+      customRow.className = "custom-input-row";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "或者，自己写你想说/想做的…";
+      const sendBtn = document.createElement("button");
+      sendBtn.innerHTML = '➤';
+      const submit = () => { this.sendCustomAction(input.value); };
+      sendBtn.onclick = submit;
+      input.onkeydown = (e) => { if (e.key === "Enter") submit(); };
+      customRow.appendChild(input); customRow.appendChild(sendBtn);
+      panel.appendChild(customRow);
+    }
+
+    const scroll = root.querySelector("#threadScroll");
+    scroll.scrollTop = scroll.scrollHeight;
+  },
+
+  renderFeed(root){
+    root.innerHTML = `
+      <div class="topbar">
+        <div class="title">动态广场</div>
+        <button class="back" id="refreshFeedBtn" title="刷新动态">${this.feedBusy ? "…" : "↺"}</button>
+      </div>
+      <div class="scroll" id="feedScroll"></div>
+      ${this.bottomTabsHtml("feed")}
+    `;
+    this.bindBottomTabs(root);
+    root.querySelector("#refreshFeedBtn").onclick = () => this.refreshFeed();
+
+    const scroll = root.querySelector("#feedScroll");
+
+    // 发布框
+    const composeWrap = document.createElement("div");
+    composeWrap.style.cssText = "margin:14px 16px;background:var(--bubble);border:1px solid var(--line);border-radius:14px;padding:12px 14px;";
+    const composeInput = document.createElement("textarea");
+    composeInput.placeholder = "分享点什么…";
+    composeInput.style.cssText = "width:100%;min-height:50px;border:none;background:none;color:var(--ink);font-family:inherit;font-size:13.5px;resize:vertical;";
+    const composeRow = document.createElement("div");
+    composeRow.style.cssText = "display:flex;justify-content:flex-end;margin-top:6px;";
+    const composeBtn = document.createElement("button");
+    composeBtn.textContent = "发布";
+    composeBtn.style.cssText = "background:var(--accent);color:#241D2B;border:none;padding:7px 18px;border-radius:20px;font-size:12.5px;font-weight:700;cursor:pointer;";
+    composeBtn.onclick = () => {
+      if (this.feedBusy) return;
+      this.postAsPlayer(composeInput.value);
+      composeInput.value = "";
+    };
+    composeRow.appendChild(composeBtn);
+    composeWrap.appendChild(composeInput); composeWrap.appendChild(composeRow);
+    scroll.appendChild(composeWrap);
+
+    if (this.feed.length === 0) {
+      const hint = document.createElement("div");
+      hint.className = "empty-hint";
+      hint.textContent = "还没有动态，点右上角刷新试试，或者自己先发一条。";
+      scroll.appendChild(hint);
+    }
+
+    this.feed.forEach(post => {
+      const card = document.createElement("div");
+      card.style.cssText = "margin:0 16px 14px 16px;background:var(--bubble);border:1px solid var(--line);border-radius:14px;padding:14px;";
+
+      const head = document.createElement("div");
+      head.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:8px;";
+      const av = document.createElement("div");
+      av.className = "avatar";
+      av.style.cssText = `width:36px;height:36px;font-size:14px;background:hsl(${hashHue(post.authorName)},50%,50%);`;
+      av.textContent = post.authorName.slice(0,1);
+      const nameWrap = document.createElement("div");
+      const nm = document.createElement("div");
+      nm.style.cssText = "font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px;color:" +
+        (post.authorType === "passerby" ? "var(--muted)" : "var(--ink)") + ";";
+      nm.textContent = post.authorName + (post.authorType === "player" ? "（我）" : "");
+      if (post.authorType === "passerby") {
+        const tag = document.createElement("span");
+        tag.style.cssText = "font-size:9.5px;font-weight:400;border:1px solid var(--line);border-radius:6px;padding:1px 5px;color:var(--muted);";
+        tag.textContent = "路人";
+        nm.appendChild(tag);
+      }
+      const tm = document.createElement("div");
+      tm.style.cssText = "font-size:11px;color:var(--muted);";
+      tm.textContent = this.formatFeedTime(post.createdAt);
+      nameWrap.appendChild(nm); nameWrap.appendChild(tm);
+      head.appendChild(av); head.appendChild(nameWrap);
+      card.appendChild(head);
+
+      const body = document.createElement("div");
+      body.style.cssText = "font-size:14px;line-height:1.7;color:var(--ink);margin-bottom:10px;white-space:pre-wrap;";
+      body.textContent = post.text;
+      card.appendChild(body);
+
+      const actionRow = document.createElement("div");
+      actionRow.style.cssText = "display:flex;gap:18px;margin-bottom:6px;";
+      const likeBtn = document.createElement("button");
+      likeBtn.style.cssText = "background:none;border:none;cursor:pointer;font-size:12.5px;color:" + (post.liked ? "var(--accent)" : "var(--muted)") + ";";
+      likeBtn.textContent = (post.liked ? "♥ " : "♡ ") + "喜欢";
+      likeBtn.onclick = () => this.toggleLike(post.id);
+      actionRow.appendChild(likeBtn);
+      card.appendChild(actionRow);
+
+      if (post.comments && post.comments.length) {
+        const cWrap = document.createElement("div");
+        cWrap.style.cssText = "background:var(--bubble-narrative);border-radius:10px;padding:10px 12px;margin-top:6px;";
+        post.comments.forEach(cm => {
+          const line = document.createElement("div");
+          const indent = cm.replyToName ? "16px" : "0px";
+          line.style.cssText = "font-size:12.5px;line-height:1.7;color:var(--ink);margin-bottom:5px;margin-left:" + indent + ";";
+          const nameColor = cm.authorType === "char" ? "var(--accent-soft)" : (cm.authorType === "player" ? "var(--ink)" : "var(--muted)");
+          const strong = document.createElement("span");
+          strong.style.cssText = "font-weight:700;color:" + nameColor + ";";
+          strong.textContent = cm.authorName + (cm.authorType === "passerby" ? " " : "") + "：";
+          if (cm.replyToName) {
+            const replyTag = document.createElement("span");
+            replyTag.style.cssText = "color:var(--muted);font-weight:400;font-size:11.5px;";
+            replyTag.textContent = "回复@" + cm.replyToName + "：";
+            line.appendChild(replyTag);
+          }
+          line.appendChild(strong);
+          line.appendChild(document.createTextNode(cm.text));
+          cWrap.appendChild(line);
+        });
+        card.appendChild(cWrap);
+      }
+
+      const commentRow = document.createElement("div");
+      commentRow.className = "custom-input-row";
+      commentRow.style.marginTop = "8px";
+      const cInput = document.createElement("input");
+      cInput.type = "text";
+      cInput.placeholder = "写条评论…";
+      const cSend = document.createElement("button");
+      cSend.innerHTML = "➤";
+      const submitComment = () => {
+        this.addFeedComment(post.id, cInput.value);
+        cInput.value = "";
+      };
+      cSend.onclick = submitComment;
+      cInput.onkeydown = (e) => { if (e.key === "Enter") submitComment(); };
+      commentRow.appendChild(cInput); commentRow.appendChild(cSend);
+      card.appendChild(commentRow);
+
+      scroll.appendChild(card);
+    });
+  }
+};
+
+App.init();
+</script>
+</body>
+</html>
