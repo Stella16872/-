@@ -101,6 +101,14 @@
       radial-gradient(110% 48% at 6% 96%, var(--wash-b), transparent 60%), var(--ivory);
     transition:opacity .8s ease, visibility .8s;touch-action:none;}
   #intro.gone{opacity:0;visibility:hidden;pointer-events:none;}
+  #intro{user-select:none;-webkit-user-select:none;}
+  .intro-skip{margin-top:26px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    background:none;border:none;cursor:pointer;font-family:var(--sans);padding:8px 14px;
+    opacity:0;transition:opacity .8s;pointer-events:none;}
+  .intro-skip.on{opacity:1;pointer-events:auto;}
+  .warn{margin-top:16px;border:1px solid rgba(192,124,134,.35);background:rgba(192,124,134,.09);
+    border-radius:18px;padding:13px 15px;font-size:12.5px;line-height:1.65;color:var(--ink-2);}
+  .warn b{color:var(--rose-d);font-weight:600;}
   .intro-q{font-family:var(--display);font-size:23px;font-weight:500;letter-spacing:.01em;}
   .intro-hint{margin-top:12px;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;
     color:var(--gold-d);transition:opacity .35s;}
@@ -521,6 +529,7 @@
       </svg>
     </div>
     <div class="intro-foot"><b id="introFor"></b><span>Always close, never far</span></div>
+    <button class="intro-skip" id="introSkip">直接进入</button>
   </div>
 
   <!-- ============ 主体 ============ -->
@@ -538,6 +547,12 @@
       </div>
       <h1 class="greet"><span id="greetWord"></span>, <em id="myName"></em></h1>
       <div class="weather" id="weather"></div>
+
+      <div class="warn" id="noStore" hidden>
+        <b>这个浏览器不让本页保存数据。</b>你现在填的名字、日记、待办在关掉页面后都会消失。
+        用手机 Safari 打开、或把文件放到任意网页服务器上就正常；
+        Mac 上直接双击打开本地文件时，Safari 会拦掉本地存储。
+      </div>
 
       <div class="whisper" id="whisperCard">
         <div class="w-in">
@@ -903,6 +918,8 @@
   var DEFAULTS={you:'',partner:'',start:'',weather:'',whisper:'',cycleStart:'',cycleLen:28,theme:'auto',ready:false};
   function get(k,d){ try{var r=localStorage.getItem(K+k); if(r!=null) return JSON.parse(r);}catch(e){} return d; }
   function put(k,v){ try{localStorage.setItem(K+k,JSON.stringify(v));}catch(e){} }
+  // Safari 直接打开本地文件时会禁用 localStorage，先探一下，探不到就明说
+  var STORAGE_OK=(function(){ try{localStorage.setItem(K+'probe','1');localStorage.removeItem(K+'probe');return true;}catch(e){return false;} })();
   var STORES=['cfg','todos','entries','whispers','chat','closeness','moments','wishes','letters'];
 
   var cfg=Object.assign({},DEFAULTS,get('cfg',{}));
@@ -1469,19 +1486,43 @@
       })(t0);
     }
     function span(){ return $('sigWrap').getBoundingClientRect().width*(SPAN/520); }
+    function enter(record){
+      if(record) recordCloseness(Math.round(p*100));
+      setTimeout(function(){ intro.classList.add('gone'); renderHome(); },420);
+    }
+    // 不用 setPointerCapture：Safari 用鼠标捕获后有时不派发 pointerup，
+    // 会卡在开屏上。改成按下时把监听挂到 window，并多留几条放手的退路。
+    function onMove(e){ if(dragging) draw(sp+(sx-e.clientX)/span()); }
+    function onUp(){
+      if(!dragging) return;
+      dragging=false; detach();
+      if(p>=.08) enter(true);          // 拉过一点就算数，拉到哪儿就是多少
+      else animate(0);                 // 只是碰了一下，弹回去，不记
+    }
+    function attach(){
+      window.addEventListener('pointermove',onMove);
+      window.addEventListener('pointerup',onUp);
+      window.addEventListener('pointercancel',onUp);
+      window.addEventListener('mouseup',onUp);
+      window.addEventListener('touchend',onUp);
+      window.addEventListener('blur',onUp);
+    }
+    function detach(){
+      window.removeEventListener('pointermove',onMove);
+      window.removeEventListener('pointerup',onUp);
+      window.removeEventListener('pointercancel',onUp);
+      window.removeEventListener('mouseup',onUp);
+      window.removeEventListener('touchend',onUp);
+      window.removeEventListener('blur',onUp);
+    }
     intro.addEventListener('pointerdown',function(e){
       if($('setup').classList.contains('on')) return;
-      dragging=true;sx=e.clientX;sp=p;cancelAnimationFrame(raf);intro.setPointerCapture(e.pointerId);
+      if(e.target.closest('.intro-skip')) return;
+      e.preventDefault();
+      dragging=true; sx=e.clientX; sp=p; cancelAnimationFrame(raf); attach();
     });
-    intro.addEventListener('pointermove',function(e){ if(dragging) draw(sp+(sx-e.clientX)/span()); });
-    function release(){
-      if(!dragging) return; dragging=false;
-      var v=Math.round(p*100);
-      if(p>.5) animate(1,function(){ setTimeout(function(){ recordCloseness(v); intro.classList.add('gone'); renderHome(); },560); });
-      else { recordCloseness(v); animate(0); }
-    }
-    intro.addEventListener('pointerup',release);
-    intro.addEventListener('pointercancel',release);
+    $('introSkip').addEventListener('click',function(){ enter(false); });
+    setTimeout(function(){ $('introSkip').classList.add('on'); },5000);
     draw(0);
   })();
 
@@ -1490,6 +1531,7 @@
     "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-8.2-5.3-8.2-11A4.7 4.7 0 0 1 12 7.4 4.7 4.7 0 0 1 20.2 10c0 5.7-8.2 11-8.2 11z'/%3E%3C/svg%3E\")");
   applyTheme();
   if(!cfg.ready){ $('setup').classList.add('on'); }
+  if(!STORAGE_OK){ $('noStore').hidden=false; }
   syncNames(); renderHome(); renderCharts(); renderChat(); renderTodos(); renderCal();
   setInterval(function(){ if($('s-home').classList.contains('on')) renderHome(); },60000);
 })();
