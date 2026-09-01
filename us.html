@@ -507,24 +507,27 @@
   <!-- ============ 开屏 ============ -->
   <div id="intro">
     <div class="intro-q">How close do you feel today?</div>
-    <div class="intro-hint" id="hint">Drag &nbsp;&rarr;</div>
+    <div class="intro-hint" id="hint">Slide all the way</div>
     <div class="sig-wrap" id="sigWrap">
       <svg id="sig" viewBox="0 0 520 210" preserveAspectRatio="xMidYMid meet">
-        <defs><linearGradient id="gInk" gradientUnits="userSpaceOnUse" x1="30" y1="140" x2="490" y2="90">
+        <defs><linearGradient id="gInk" gradientUnits="userSpaceOnUse" x1="30" y1="140" x2="500" y2="90">
           <stop offset="0" stop-color="#C4A063"/><stop offset=".5" stop-color="#CF9AA0"/><stop offset="1" stop-color="#B4747F"/>
         </linearGradient></defs>
-        <line id="rail" x1="34" y1="140" x2="470" y2="140" stroke="url(#gInk)" stroke-width="2.6" stroke-linecap="round"/>
+        <circle id="endMark" cx="40" cy="140" r="9" fill="none" stroke="rgba(150,140,140,.3)" stroke-width="1.5"/>
+        <line id="rail" x1="40" y1="140" x2="480" y2="140" stroke="url(#gInk)" stroke-width="2.6" stroke-linecap="round"/>
         <g id="scriptG">
           <path id="script" fill="none" stroke="url(#gInk)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"
-                d="M 250 140 C 274 140 294 134 306 110 C 312 98 300 92 288 97 C 274 102 270 120 278 131
-                   C 288 141 302 139 306 127 C 308 121 308 132 310 140 C 314 124 320 108 328 106
-                   C 336 104 338 118 340 128 C 342 138 352 143 358 132 C 362 122 368 108 376 106
-                   C 384 104 386 118 388 128 C 390 138 400 143 406 132 C 412 118 418 82 424 64
-                   C 428 50 440 50 438 67 C 436 84 424 112 420 126 C 417 136 426 143 435 136
-                   C 444 130 452 114 462 107 C 472 101 472 116 458 122 C 446 127 444 141 458 141
-                   C 470 141 478 133 486 126"/>
+                d="M 40 140 C 66 140 88 144 110 142 C 126 141 138 138 150 140
+                   C 174 140 194 134 206 110 C 212 98 200 92 188 97 C 174 102 170 120 178 131
+                   C 188 141 202 139 206 127 C 208 121 208 132 210 140 C 214 124 220 108 228 106
+                   C 236 104 238 118 240 128 C 242 138 252 143 258 132 C 262 122 268 108 276 106
+                   C 284 104 286 118 288 128 C 290 138 300 143 306 132 C 312 118 318 82 324 64
+                   C 328 50 340 50 338 67 C 336 84 324 112 320 126 C 317 136 326 143 335 136
+                   C 344 130 352 114 362 107 C 372 101 372 116 358 122 C 346 127 344 141 358 141
+                   C 370 141 378 133 386 126 C 402 116 420 108 440 110 C 458 112 470 122 482 130
+                   C 488 134 492 136 496 136"/>
         </g>
-        <path id="heartP" transform="translate(470,140)" fill="url(#gDuo)"
+        <path id="heartP" transform="translate(480,140)" fill="url(#gDuo)"
               d="M0,-4.4 C-3.4,-12 -13.6,-11 -13.6,-2.5 C-13.6,4.6 -6.7,9.6 0,14 C6.7,9.6 13.6,4.6 13.6,-2.5 C13.6,-11 3.4,-12 0,-4.4 Z"/>
       </svg>
     </div>
@@ -1036,7 +1039,7 @@
     var avg=rec.length?Math.round(rec.reduce(function(s,x){return s+x.v;},0)/rec.length):null;
     var y=closeness[key(new Date(Date.now()-DAY))];
     $('closeNote').innerHTML = v==null
-      ? '今天还没记<br>拖开屏那颗心，或点这里'
+      ? '今天还没记<br>点这里记一下'
       : (avg!=null?'两周平均 '+avg:'') + (y!=null?'<br>较昨天 '+(v-y>=0?'+':'')+(v-y):'');
     $('closeBars').innerHTML=days.map(function(x){
       var isT=x.k===tk;
@@ -1461,12 +1464,14 @@
     syncNames(); renderHome(); renderCal();
   });
 
-  /* ============ 开屏 ============ */
+  /* ============ 开屏：拉到底才开锁 ============ */
   (function(){
-    var intro=$('intro'), rail=$('rail'), script=$('script'), g=$('scriptG'), heart=$('heartP'), hint=$('hint');
-    var X0=250, X1=470, SPAN=X1-X0, len=script.getTotalLength();
+    var intro=$('intro'), wrap=$('sigWrap'), rail=$('rail'), script=$('script'),
+        g=$('scriptG'), heart=$('heartP'), hint=$('hint'), mark=$('endMark');
+    var X0=40, X1=480, SPAN=X1-X0, len=script.getTotalLength(), GRAB=80, DONE=.9;
     script.style.strokeDasharray=len; script.style.strokeDashoffset=len;
-    var p=0, dragging=false, sx=0, sp=0, raf=null;
+    var p=0, dragging=false, off=0, raf=null, tries=0;
+
     function draw(v){
       p=Math.max(0,Math.min(1,v));
       var x=X0+(1-p)*SPAN;
@@ -1474,55 +1479,61 @@
       g.setAttribute('transform','translate('+((1-p)*SPAN)+',0)');
       script.style.strokeDashoffset=len*(1-p);
       heart.setAttribute('transform','translate('+x+',140)');
-      if(p>.02) hint.classList.add('dim');
+      mark.setAttribute('stroke', p>=DONE?'#C4A063':'rgba(150,140,140,.3)');
+      mark.setAttribute('r', p>=DONE?11:9);
+      if(p>.02) hint.classList.add('dim'); else hint.classList.remove('dim');
     }
     function animate(to,after){
       cancelAnimationFrame(raf);
-      var from=p,t0=performance.now(),dur=Math.abs(to-from)*560+140;
+      var from=p,t0=performance.now(),dur=Math.abs(to-from)*520+140;
       (function step(now){
         var k=Math.min(1,(now-t0)/dur);
         draw(from+(to-from)*(1-Math.pow(1-k,3)));
         if(k<1) raf=requestAnimationFrame(step); else if(after) after();
       })(t0);
     }
-    function span(){ return $('sigWrap').getBoundingClientRect().width*(SPAN/520); }
-    function enter(record){
-      if(record) recordCloseness(Math.round(p*100));
-      setTimeout(function(){ intro.classList.add('gone'); renderHome(); },420);
+    function unlock(){ setTimeout(function(){ intro.classList.add('gone'); renderHome(); },460); }
+
+    // 屏幕坐标 → viewBox 坐标。svg 用 meet 等比缩放，横向正好铺满，所以只按宽度换算
+    function vb(clientX){
+      var r=wrap.getBoundingClientRect();
+      return (clientX-r.left)/(r.width/520);
     }
-    // 不用 setPointerCapture：Safari 用鼠标捕获后有时不派发 pointerup，
-    // 会卡在开屏上。改成按下时把监听挂到 window，并多留几条放手的退路。
-    function onMove(e){ if(dragging) draw(sp+(sx-e.clientX)/span()); }
+    // 不用 setPointerCapture：Safari 用鼠标捕获后有时不派发 pointerup，会卡在开屏。
+    // 按下时把监听挂到 window，并多留几条放手的退路。
+    function onMove(e){
+      if(!dragging) return;
+      var x=vb(e.clientX);
+      // 手指按到最左端就算拉满，不管当初是从哪儿抓的
+      draw(x<=X0 ? 1 : (X1-Math.max(X0,Math.min(X1,x-off)))/SPAN);
+    }
     function onUp(){
       if(!dragging) return;
       dragging=false; detach();
-      if(p>=.08) enter(true);          // 拉过一点就算数，拉到哪儿就是多少
-      else animate(0);                 // 只是碰了一下，弹回去，不记
+      if(p>=DONE) animate(1,unlock);
+      else { tries++; animate(0); if(tries>=2) $('introSkip').classList.add('on'); }
     }
     function attach(){
       window.addEventListener('pointermove',onMove);
-      window.addEventListener('pointerup',onUp);
-      window.addEventListener('pointercancel',onUp);
-      window.addEventListener('mouseup',onUp);
-      window.addEventListener('touchend',onUp);
-      window.addEventListener('blur',onUp);
+      ['pointerup','pointercancel','mouseup','touchend','blur'].forEach(function(t){
+        window.addEventListener(t,onUp);
+      });
     }
     function detach(){
       window.removeEventListener('pointermove',onMove);
-      window.removeEventListener('pointerup',onUp);
-      window.removeEventListener('pointercancel',onUp);
-      window.removeEventListener('mouseup',onUp);
-      window.removeEventListener('touchend',onUp);
-      window.removeEventListener('blur',onUp);
+      ['pointerup','pointercancel','mouseup','touchend','blur'].forEach(function(t){
+        window.removeEventListener(t,onUp);
+      });
     }
-    intro.addEventListener('pointerdown',function(e){
+    wrap.addEventListener('pointerdown',function(e){
       if($('setup').classList.contains('on')) return;
-      if(e.target.closest('.intro-skip')) return;
+      var x=vb(e.clientX), hx=X0+(1-p)*SPAN;
+      if(x < hx-GRAB) return;                 // 只有抓住爱心（或它右边）才算
       e.preventDefault();
-      dragging=true; sx=e.clientX; sp=p; cancelAnimationFrame(raf); attach();
+      dragging=true; off=x-hx; cancelAnimationFrame(raf); attach();
     });
-    $('introSkip').addEventListener('click',function(){ enter(false); });
-    setTimeout(function(){ $('introSkip').classList.add('on'); },5000);
+    $('introSkip').addEventListener('click',function(){ intro.classList.add('gone'); renderHome(); });
+    setTimeout(function(){ $('introSkip').classList.add('on'); },15000);
     draw(0);
   })();
 
