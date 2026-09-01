@@ -88,3 +88,20 @@ Cormorant 默认是旧式数字（7、9 会掉到基线以下，0 长得像 O）
 ## 装到 iPhone 桌面
 
 Safari 打开 → 分享 → 添加到主屏幕。已加全屏 meta，从桌面点开没有地址栏。
+
+---
+
+# projects.html — 项目索引
+
+同目录下还有一个 `projects.html`，是所有 GitHub 项目的导航页：
+`https://stella16872.github.io/-/projects.html`
+
+**它会自己更新**：每次打开都实时调 GitHub 公开 API 读一遍仓库列表，
+新项目推上去、开好 Pages，刷新这页就自动出现，不用改代码。
+读不到 GitHub 时（断网、限流）退回到内置的快照，并在顶部标明。
+
+给仓库填了 Description（仓库页右上角 About 旁边的齿轮），这里会跟着显示。
+
+几个需要特殊处理的项目写在 `projects.html` 里的 `OVERRIDE`：
+Simulator 根目录没有 index.html 所以链接带文件名；`-` 拆成 Us 和年上・信两条；
+article-generator（Flask 后端）和 desktop-pet（桌面程序）标为 Pages 跑不了。
