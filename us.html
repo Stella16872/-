@@ -453,6 +453,44 @@
   .letter .lb{font-size:14px;line-height:1.75;color:var(--ink-2);margin-top:9px;white-space:pre-wrap;}
   .letter .seal{font-size:11.5px;color:#C9BEC4;margin-top:9px;letter-spacing:.04em;}
 
+  /* ---------- 可点击的记录卡 ---------- */
+  .card.tap{cursor:pointer;transition:transform .15s;}
+  .card.tap:active{transform:scale(.985);}
+  .c-big.none{color:var(--faint);}
+  .tap-hint{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-d);
+    margin-top:10px;opacity:.85;}
+  .line7{width:100%;height:46px;margin-top:12px;display:block;}
+  .sleep-seg{display:flex;gap:4px;margin-top:14px;height:7px;}
+  .sleep-seg i{border-radius:999px;display:block;background:var(--line);flex:1;}
+  .sleep-seg i.v{background:linear-gradient(90deg,var(--gold-l),var(--rose-d));}
+
+  /* ---------- 日记列表 ---------- */
+  .ent{display:block;padding:16px 0;border-bottom:1px solid var(--line);cursor:pointer;}
+  .ent:last-child{border-bottom:none;}
+  .ent .ed{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-d);}
+  .ent .et{font-family:var(--display);font-size:17px;line-height:1.7;color:var(--ink);margin-top:7px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .ent mark{background:rgba(196,160,99,.28);color:inherit;border-radius:3px;padding:0 2px;}
+  .srch{display:flex;align-items:center;gap:10px;background:var(--card);border:var(--edge);
+    border-radius:999px;padding:11px 18px;box-shadow:var(--shadow);margin-top:4px;}
+  .srch input{flex:1;border:none;background:none;outline:none;font-size:14.5px;
+    font-family:var(--sans);color:var(--ink);}
+  .srch input::placeholder{color:var(--faint);}
+
+  /* ---------- 低语速写 ---------- */
+  .w-compose{background:var(--card);border:var(--edge);border-radius:20px;box-shadow:var(--shadow);
+    padding:14px 16px;margin-bottom:22px;}
+  .w-compose textarea{width:100%;border:none;background:none;outline:none;resize:none;
+    font-family:var(--display);font-size:17px;line-height:1.75;color:var(--ink);min-height:66px;}
+  .w-compose textarea::placeholder{color:var(--faint);}
+  .w-compose .row2{display:flex;align-items:center;justify-content:space-between;
+    border-top:1px solid var(--line);padding-top:10px;margin-top:6px;}
+  .w-compose .row2 span{font-size:11px;color:var(--muted);letter-spacing:.04em;}
+  .btn-sm{border:none;border-radius:999px;padding:8px 18px;font-size:12.5px;font-weight:600;
+    font-family:var(--sans);letter-spacing:.04em;cursor:pointer;
+    background:linear-gradient(135deg,var(--gold),var(--rose-d));color:#fff;}
+  .btn-sm[disabled]{background:var(--line);color:var(--faint);cursor:default;}
+
   /* ---------- 设置 ---------- */
   .sheet-mask{position:absolute;inset:0;background:rgba(40,32,44,.34);z-index:80;opacity:0;visibility:hidden;
     transition:opacity .3s,visibility .3s;backdrop-filter:blur(2px);}
@@ -626,30 +664,29 @@
       </div>
 
       <div class="duo">
-        <div class="card">
-          <div class="c-head"><div class="c-title">Steps</div><div class="c-note">0.42 km</div></div>
-          <div class="c-big">580</div>
+        <div class="card tap" data-rec="steps">
+          <div class="c-head"><div class="c-title">Steps</div><div class="c-note" id="stepKm"></div></div>
+          <div class="c-big" id="stepNum">—</div>
           <div class="bars" id="stepBars"></div>
           <div class="days" id="stepDays"></div>
         </div>
-        <div class="card">
+        <div class="card tap" data-rec="hr">
           <div class="c-head"><div class="c-title">Heart Rate</div></div>
-          <div class="c-big">114<small>bpm</small></div>
-          <svg class="spark" viewBox="0 0 160 50" preserveAspectRatio="none">
-            <path id="hrPath" fill="none" stroke="#C07C86" stroke-width="1.1" stroke-linejoin="round"/>
+          <div class="c-big" id="hrNum">—</div>
+          <svg class="line7" viewBox="0 0 160 46" preserveAspectRatio="none">
+            <path id="hrPath" fill="none" stroke="url(#gRose)" stroke-width="1.8"
+                  stroke-linejoin="round" stroke-linecap="round"/>
           </svg>
-          <div class="c-note" style="margin-top:8px">56 — 125 today</div>
+          <div class="c-note" id="hrNote"></div>
         </div>
       </div>
 
       <div class="duo">
-        <div class="card">
+        <div class="card tap" data-rec="sleep">
           <div class="c-head"><div class="c-title">Sleep</div></div>
-          <div class="c-big">3<small>h</small>2<small>m</small></div>
-          <div class="sleep-bar">
-            <i style="flex:1.2;background:#3B3242"></i><i style="flex:4.2;background:#C9A9AE"></i><i style="flex:1.6;background:#DCC08A"></i>
-          </div>
-          <div class="sleep-times"><span>12:57 PM</span><span>4:09 PM</span></div>
+          <div class="c-big" id="sleepNum">—</div>
+          <div class="sleep-seg" id="sleepSeg"></div>
+          <div class="sleep-times"><span id="sleepDays"></span><span id="sleepAvg"></span></div>
         </div>
         <div class="card">
           <div class="c-head"><div class="c-title">Cycle</div><div class="c-note" id="cycleNext"></div></div>
@@ -668,14 +705,15 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card tap" data-rec="body">
         <div class="eyebrow">Body</div>
         <div class="body-grid">
-          <div><div class="v">96%</div><div class="k">血氧</div></div>
-          <div><div class="v">20<small style="font-size:14px">ms</small></div><div class="k">HRV</div></div>
-          <div><div class="v">36.5°</div><div class="k">腕温</div></div>
-          <div><div class="v">44.5<small style="font-size:14px">kg</small></div><div class="k">体重</div></div>
+          <div><div class="v" id="bSpo2">—</div><div class="k">血氧</div></div>
+          <div><div class="v" id="bHrv">—</div><div class="k">HRV</div></div>
+          <div><div class="v" id="bTemp">—</div><div class="k">腕温</div></div>
+          <div><div class="v" id="bWeight">—</div><div class="k">体重</div></div>
         </div>
+        <div class="tap-hint" id="bodyHint"></div>
       </div>
     </section>
 
@@ -722,6 +760,14 @@
         </div>
       </div>
 
+      <div class="menu" style="margin-top:16px">
+        <div class="m-row" data-go="sub-entries">
+          <div class="m-ico"><svg viewBox="0 0 24 24"><path d="M5 4.5h14v15H5z"/><path d="M8.5 9h7M8.5 13h7M8.5 17h4"/></svg></div>
+          <div class="t">全部日记</div><div class="c" id="cEntries"></div>
+          <svg class="chev" viewBox="0 0 9 15"><path d="M1 1l6.5 6.5L1 14"/></svg>
+        </div>
+      </div>
+
       <div class="card" id="calCard" style="padding:18px 14px">
         <div class="cal-head">
           <button class="cal-nav" id="calPrev">&lsaquo;</button>
@@ -756,6 +802,11 @@
       <div class="ttl"><b>Whispers</b><span id="wSubTitle"></span></div>
     </div>
     <div class="sub-body">
+      <div class="w-compose">
+        <textarea id="wInput" placeholder="写今天想对 Ta 说的一句…" maxlength="200"></textarea>
+        <div class="row2"><span id="wCount">0 / 200</span>
+          <button class="btn-sm" id="wSave" disabled>记下来</button></div>
+      </div>
       <div class="w-quote">&ldquo;</div>
       <div class="w-text" id="wText"></div>
       <div class="w-by"><div class="avatar" id="wAv"></div><span id="wByName"></span></div>
@@ -890,6 +941,29 @@
     </div>
   </div>
 
+  <!-- 全部日记 -->
+  <div class="sub" id="sub-entries">
+    <div class="sub-head">
+      <button class="back" data-back><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ttl"><b>全部日记</b><span id="entriesWho"></span></div>
+    </div>
+    <div class="sub-body">
+      <div class="srch"><input id="entQ" placeholder="搜日记里的字…" autocomplete="off"></div>
+      <div class="plate" style="padding:2px 18px" id="entList"></div>
+    </div>
+  </div>
+
+  <!-- ============ 记录（步数/心率/睡眠/身体） ============ -->
+  <div class="sheet-mask" id="recMask"></div>
+  <div class="sheet" id="recSheet">
+    <h3 id="recTitle">记录</h3>
+    <div class="hint" id="recHint"></div>
+    <div id="recFields"></div>
+    <button class="btn-dark" id="recSave">保存</button>
+    <button class="btn-line btn-danger" id="recClear">清掉今天这条</button>
+    <button class="btn-plain" id="recCancel">取消</button>
+  </div>
+
   <!-- ============ 设置 ============ -->
   <div class="sheet-mask" id="mask"></div>
   <div class="sheet" id="sheet">
@@ -923,7 +997,7 @@
   function put(k,v){ try{localStorage.setItem(K+k,JSON.stringify(v));}catch(e){} }
   // Safari 直接打开本地文件时会禁用 localStorage，先探一下，探不到就明说
   var STORAGE_OK=(function(){ try{localStorage.setItem(K+'probe','1');localStorage.removeItem(K+'probe');return true;}catch(e){return false;} })();
-  var STORES=['cfg','todos','entries','whispers','chat','closeness','moments','wishes','letters'];
+  var STORES=['cfg','todos','entries','whispers','chat','closeness','moments','wishes','letters','health'];
 
   var cfg=Object.assign({},DEFAULTS,get('cfg',{}));
   var todos=get('todos',{me:[],partner:[]});
@@ -934,9 +1008,10 @@
   var moments=get('moments',[]);
   var wishes=get('wishes',[]);
   var letters=get('letters',[]);
+  var health=get('health',{});
   function sc(){put('cfg',cfg);} function st(){put('todos',todos);} function se(){put('entries',entries);}
   function sw(){put('whispers',whispers);} function sm(){put('chat',chat);} function scl(){put('closeness',closeness);}
-  function smo(){put('moments',moments);} function swi(){put('wishes',wishes);} function sle(){put('letters',letters);}
+  function smo(){put('moments',moments);} function swi(){put('wishes',wishes);} function sle(){put('letters',letters);} function shl(){put('health',health);}
 
   /* ---------- 日期 ---------- */
   function pad(n){return n<10?'0'+n:''+n;}
@@ -1109,24 +1184,137 @@
   }
   $('cycleBtn').addEventListener('click',function(){ cfg.cycleStart=key(new Date()); sc(); renderCycle(); });
 
-  /* ---------- 占位图表 ---------- */
-  function renderCharts(){
-    var week=[8200,3100,5400,4200,900,700,580], wd=['M','T','W','T','F','S','S'], ti=(new Date().getDay()+6)%7;
-    var steps=week.slice(0,ti).concat([week[6]]), max=Math.max.apply(null,steps.concat([1])), b='',d='';
-    for(var i=0;i<7;i++){
-      var hh=i<steps.length?Math.max(3,steps[i]/max*50):3;
-      b+='<i class="'+(i===ti?'today':'')+'" style="height:'+hh+'px'+(i>ti?';opacity:.4':'')+'"></i>';
-      d+='<span class="'+(i===ti?'today':'')+'">'+wd[i]+'</span>';
-    }
-    $('stepBars').innerHTML=b; $('stepDays').innerHTML=d;
-    var pts=[],seed=7;
-    for(var j=0;j<110;j++){
-      seed=(seed*1103515245+12345)&0x7fffffff;
-      var base=25+Math.sin(j/16)*7+(j>52?-8:0)+(j>60&&j<66?6:0)+(seed/0x7fffffff-.5)*12;
-      pts.push([j*160/109,Math.max(2,Math.min(48,base))]);
-    }
-    $('hrPath').setAttribute('d','M'+pts.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1);}).join('L'));
+  /* ---------- 健康：全部来自你自己填的数据 ---------- */
+  var REC={
+    steps:{t:'步数',hint:'今天走了多少？留空表示不记。',f:[
+      {k:'steps',l:'步数',ph:'6200'},{k:'km',l:'公里',ph:'4.3',dec:1}]},
+    hr:{t:'心率',hint:'今天的心率。',f:[
+      {k:'hr',l:'当前',ph:'72'},{k:'hrMin',l:'最低',ph:'56'},{k:'hrMax',l:'最高',ph:'125'}]},
+    sleep:{t:'睡眠',hint:'昨晚睡了多久。',f:[
+      {k:'sleepH',l:'小时',ph:'7'},{k:'sleepM',l:'分钟',ph:'20'}]},
+    body:{t:'身体',hint:'今天的身体数据。',f:[
+      {k:'spo2',l:'血氧 %',ph:'98'},{k:'hrv',l:'HRV ms',ph:'45'},
+      {k:'temp',l:'腕温 °',ph:'36.5',dec:1},{k:'weight',l:'体重 kg',ph:'50.2',dec:1}]}
+  };
+  function last7(){
+    var out=[],t=mid(new Date());
+    for(var i=6;i>=0;i--){ var d=new Date(t.getTime()-i*DAY); out.push({k:key(d),d:d}); }
+    return out;
   }
+  function hv(k,field){ var r=health[k]; return r&&r[field]!=null?r[field]:null; }
+  function fmtSleep(m){ return m==null?'—':Math.floor(m/60)+'<small>h</small>'+(m%60)+'<small>m</small>'; }
+
+  function renderHealth(){
+    var days=last7(), tk=key(new Date()), WD=['S','M','T','W','T','F','S'];
+
+    // 步数
+    var st=hv(tk,'steps'), km=hv(tk,'km');
+    $('stepNum').innerHTML = st==null?'—':st;
+    $('stepNum').classList.toggle('none',st==null);
+    $('stepKm').textContent = km!=null?(km+' km'):(st==null?'点一下记录':'');
+    var vals=days.map(function(x){return hv(x.k,'steps');});
+    var max=Math.max.apply(null,vals.filter(function(v){return v!=null;}).concat([1]));
+    $('stepBars').innerHTML=days.map(function(x,i){
+      var v=vals[i];
+      return '<i class="'+(x.k===tk&&v!=null?'today':'')+'" style="height:'+
+        (v!=null?Math.max(4,v/max*50):3)+'px"></i>';
+    }).join('');
+    $('stepDays').innerHTML=days.map(function(x){
+      return '<span class="'+(x.k===tk?'today':'')+'">'+WD[x.d.getDay()]+'</span>';
+    }).join('');
+
+    // 心率
+    var hr=hv(tk,'hr'), lo=hv(tk,'hrMin'), hi=hv(tk,'hrMax');
+    $('hrNum').innerHTML = hr==null?'—':hr+'<small>bpm</small>';
+    $('hrNum').classList.toggle('none',hr==null);
+    $('hrNote').textContent = (lo!=null&&hi!=null)?lo+' — '+hi+' today':(hr==null?'点一下记录':'');
+    var pts=[];
+    days.forEach(function(x,i){ var v=hv(x.k,'hr'); if(v!=null) pts.push([i,v]); });
+    if(pts.length){
+      var ys=pts.map(function(p){return p[1];}), mn=Math.min.apply(null,ys), mx=Math.max.apply(null,ys);
+      var span=(mx-mn)||1;
+      var d=pts.map(function(p,i){
+        var x=pts.length===1?80:p[0]*160/6, y=40-((p[1]-mn)/span)*30-3;
+        return (i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);
+      }).join(' ');
+      if(pts.length===1) d='M70 22 L90 22';
+      $('hrPath').setAttribute('d',d);
+    } else $('hrPath').setAttribute('d','');
+
+    // 睡眠
+    var sl=hv(tk,'sleep');
+    $('sleepNum').innerHTML=fmtSleep(sl);
+    $('sleepNum').classList.toggle('none',sl==null);
+    var got=days.filter(function(x){return hv(x.k,'sleep')!=null;});
+    $('sleepSeg').innerHTML=days.map(function(x){
+      return '<i class="'+(hv(x.k,'sleep')!=null?'v':'')+'"></i>';
+    }).join('');
+    $('sleepDays').textContent=got.length?'近 7 天记了 '+got.length+' 天':'点一下记录';
+    if(got.length){
+      var avg=Math.round(got.reduce(function(a,x){return a+hv(x.k,'sleep');},0)/got.length);
+      $('sleepAvg').textContent='平均 '+Math.floor(avg/60)+'h '+(avg%60)+'m';
+    } else $('sleepAvg').textContent='';
+
+    // 身体
+    var b=[['bSpo2','spo2','%'],['bHrv','hrv','ms'],['bTemp','temp','°'],['bWeight','weight','kg']];
+    var any=false;
+    b.forEach(function(x){
+      var v=hv(tk,x[1]);
+      if(v!=null) any=true;
+      $(x[0]).innerHTML = v==null?'—':v+'<small style="font-size:14px">'+x[2]+'</small>';
+      $(x[0]).style.color = v==null?'var(--faint)':'';
+    });
+    $('bodyHint').textContent = any?'':'点一下记录';
+  }
+
+  /* 记录抽屉 */
+  var recKind=null;
+  function openRec(kind){
+    recKind=kind;
+    var def=REC[kind], tk=key(new Date()), r=health[tk]||{};
+    $('recTitle').textContent=def.t;
+    $('recHint').textContent=def.hint+'（'+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric'})+'）';
+    $('recFields').innerHTML=def.f.map(function(f){
+      var v=kind==='sleep'
+        ? (r.sleep==null?'':(f.k==='sleepH'?Math.floor(r.sleep/60):r.sleep%60))
+        : (r[f.k]==null?'':r[f.k]);
+      return '<div class="field"><label>'+esc(f.l)+'</label>'+
+        '<input type="number" inputmode="decimal" step="'+(f.dec?'0.1':'1')+
+        '" data-k="'+f.k+'" placeholder="'+f.ph+'" value="'+v+'"></div>';
+    }).join('');
+    $('recMask').classList.add('on'); $('recSheet').classList.add('on');
+  }
+  function closeRec(){ $('recMask').classList.remove('on'); $('recSheet').classList.remove('on'); }
+  document.body.addEventListener('click',function(e){
+    var c=e.target.closest('[data-rec]'); if(c) openRec(c.dataset.rec);
+  });
+  $('recMask').addEventListener('click',closeRec);
+  $('recCancel').addEventListener('click',closeRec);
+  $('recSave').addEventListener('click',function(){
+    var tk=key(new Date()), r=health[tk]||{}, got={};
+    $('recFields').querySelectorAll('input').forEach(function(i){
+      var v=i.value.trim(); if(v!=='') got[i.dataset.k]=parseFloat(v);
+    });
+    if(recKind==='sleep'){
+      var h=got.sleepH, m=got.sleepM;
+      if(h==null&&m==null) delete r.sleep; else r.sleep=(h||0)*60+(m||0);
+    } else {
+      REC[recKind].f.forEach(function(f){
+        if(got[f.k]==null) delete r[f.k]; else r[f.k]=got[f.k];
+      });
+    }
+    if(Object.keys(r).length) health[tk]=r; else delete health[tk];
+    shl(); closeRec(); renderHealth();
+  });
+  $('recClear').addEventListener('click',function(){
+    var tk=key(new Date()), r=health[tk];
+    if(r){
+      if(recKind==='sleep') delete r.sleep;
+      else REC[recKind].f.forEach(function(f){ delete r[f.k]; });
+      if(!Object.keys(r).length) delete health[tk];
+    }
+    shl(); closeRec(); renderHealth();
+  });
 
   /* ============ 二级页 ============ */
   function openSub(id){ $(id).classList.add('on'); }
@@ -1138,21 +1326,34 @@
     if(id==='sub-moments') renderMoments();
     if(id==='sub-wishes') renderWishes();
     if(id==='sub-letters') renderLetters();
+    if(id==='sub-entries'){ $('entQ').value=''; renderEntries(); }
     openSub(id);
   });
 
   /* ---------- 低语 ---------- */
-  $('whisperCard').addEventListener('click',function(){
-    $('wText').textContent=cfg.whisper||'今天还没有低语。去设置里写一句，旧的会自动收进下面。';
+  function saveWhisper(){
+    var v=$('wInput').value.trim(); if(!v) return;
+    if(cfg.whisper && cfg.whisper!==v){ whispers.unshift({d:key(new Date()),t:cfg.whisper});
+      whispers=whispers.slice(0,60); sw(); }
+    cfg.whisper=v; sc(); $('wInput').value=''; $('wSave').disabled=true; $('wCount').textContent='0 / 200';
+    renderHome(); openWhisper();
+  }
+  $('wInput').addEventListener('input',function(){
+    $('wCount').textContent=this.value.length+' / 200';
+    $('wSave').disabled=!this.value.trim();
+  });
+  $('wSave').addEventListener('click',saveWhisper);
+  function openWhisper(){
+    $('wText').textContent=cfg.whisper||'今天还没有低语。在上面写一句，旧的会自动收进下面。';
     $('wByName').textContent=cfg.partner; $('wSubTitle').textContent='来自 '+cfg.partner;
     $('wAv').dataset.mono=mono(cfg.partner);
     $('wPast').innerHTML=whispers.length?whispers.map(function(w){
       var d=ymd(w.d);
       return '<div class="w-item"><div class="d">'+fmtMD(d)+' · '+d.toLocaleDateString('en-US',{weekday:'short'})+
              '</div><p>'+esc(w.t)+'</p></div>';
-    }).join(''):'<div class="empty">改一次今日低语，旧的那句就会留在这里</div>';
-    openSub('sub-whisper');
-  });
+    }).join(''):'<div class="empty">换一句今日低语，旧的那句就会留在这里</div>';
+  }
+  $('whisperCard').addEventListener('click',function(){ openWhisper(); openSub('sub-whisper'); });
 
   /* ---------- 时刻 ---------- */
   $('moRepeat').addEventListener('click',function(e){
@@ -1271,11 +1472,12 @@
     return diffDays(c,now)===0?c.getHours()+':'+pad(c.getMinutes())+' 添加'
                               :(c.getMonth()+1)+'月'+c.getDate()+'日记的';
   }
-  function todoRow(it,i){
+  function todoRow(it,i,full){
     return '<div class="todo'+(it.d?' done':'')+'" data-i="'+i+'">'+
       '<button class="tick"><i></i></button>'+
       '<div class="t-mid"><div class="t-title">'+esc(it.t)+'</div><div class="t-sub">'+todoSub(it)+'</div></div>'+
-      '<div class="tag">'+(it.d?'Done':'To do')+'</div></div>';
+      '<div class="tag">'+(it.d?'Done':'To do')+'</div>'+
+      (full?'<button class="del" data-td="'+i+'">&times;</button>':'')+'</div>';
   }
   function visible(){
     var now=new Date();
@@ -1300,12 +1502,16 @@
   function renderTodoPage(){
     var o=(todos[who]||[]).filter(function(x){return !x.d;}), dn=(todos[who]||[]).filter(function(x){return x.d;});
     $('todoWho').textContent=whoName();
-    $('todoOpen').innerHTML=o.length?o.map(function(it){return todoRow(it,todos[who].indexOf(it));}).join(''):'<div class="empty">都做完了</div>';
-    $('todoDone').innerHTML=dn.length?dn.map(function(it){return todoRow(it,todos[who].indexOf(it));}).join(''):'<div class="empty">还没有完成的</div>';
+    $('todoOpen').innerHTML=o.length?o.map(function(it){return todoRow(it,todos[who].indexOf(it),1);}).join(''):'<div class="empty">都做完了</div>';
+    $('todoDone').innerHTML=dn.length?dn.map(function(it){return todoRow(it,todos[who].indexOf(it),1);}).join(''):'<div class="empty">还没有完成的</div>';
   }
   function toggleTodo(i){ if(todos[who][i]){ todos[who][i].d=!todos[who][i].d; st(); renderTodos(); renderTodoPage(); renderCal(); } }
   $('todoPages').addEventListener('click',function(e){ var t=e.target.closest('.tick'); if(t) toggleTodo(+t.closest('.todo').dataset.i); });
-  $('sub-todos').addEventListener('click',function(e){ var t=e.target.closest('.tick'); if(t) toggleTodo(+t.closest('.todo').dataset.i); });
+  $('sub-todos').addEventListener('click',function(e){
+    var d=e.target.closest('[data-td]');
+    if(d){ todos[who].splice(+d.dataset.td,1); st(); renderTodos(); renderTodoPage(); renderCal(); return; }
+    var t=e.target.closest('.tick'); if(t) toggleTodo(+t.closest('.todo').dataset.i);
+  });
   $('todoPages').addEventListener('scroll',function(){
     var w=this.clientWidth||1,i=Math.round(this.scrollLeft/w);
     $('todoDots').querySelectorAll('i').forEach(function(d,k){d.classList.toggle('on',k===i);});
@@ -1323,7 +1529,7 @@
     who=b.dataset.who;
     this.classList.toggle('right',who==='partner');
     this.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});
-    renderTodos(); renderCal();
+    renderTodos(); renderCal(); entryCount();
   });
 
   var entryKey='', saveTimer=null;
@@ -1341,10 +1547,35 @@
     saveTimer=setTimeout(function(){
       entries[who]=entries[who]||{};
       if(v.trim()) entries[who][entryKey]=v; else delete entries[who][entryKey];
-      se(); renderCal(); $('entrySaved').classList.add('on');
+      se(); renderCal(); entryCount(); renderEntries(); $('entrySaved').classList.add('on');
       setTimeout(function(){$('entrySaved').classList.remove('on');},1400);
     },500);
   });
+  function entryList(){
+    var m=entries[who]||{};
+    return Object.keys(m).filter(function(k){return (m[k]||'').trim();})
+      .sort().reverse().map(function(k){return {k:k,t:m[k]};});
+  }
+  function renderEntries(){
+    var q=($('entQ').value||'').trim().toLowerCase(), all=entryList();
+    var list=q?all.filter(function(e){return e.t.toLowerCase().indexOf(q)>=0;}):all;
+    $('entriesWho').textContent=whoName()+' · 共 '+all.length+' 篇';
+    $('entList').innerHTML=list.length?list.map(function(e){
+      var d=ymd(e.k), body=esc(e.t.replace(/\s+/g,' ').slice(0,120));
+      if(q) body=body.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<mark>$1</mark>');
+      return '<div class="ent" data-ek="'+e.k+'"><div class="ed">'+
+        d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+
+        d.toLocaleDateString('en-US',{weekday:'long'})+'</div><div class="et">'+body+'</div></div>';
+    }).join(''):'<div class="empty">'+(q?'没搜到':'还没有写过日记')+'</div>';
+  }
+  $('entQ').addEventListener('input',renderEntries);
+  $('entList').addEventListener('click',function(e){
+    var r=e.target.closest('[data-ek]'); if(r) openEntry(ymd(r.dataset.ek));
+  });
+  function entryCount(){
+    var n=entryList().length;
+    $('cEntries').textContent=n?n+' 篇':'还没有';
+  }
   $('composeBtn').addEventListener('click',function(){ openEntry(new Date()); });
   $('calBtn').addEventListener('click',function(){ $('calCard').scrollIntoView({behavior:'smooth'}); });
 
@@ -1543,7 +1774,7 @@
   applyTheme();
   if(!cfg.ready){ $('setup').classList.add('on'); }
   if(!STORAGE_OK){ $('noStore').hidden=false; }
-  syncNames(); renderHome(); renderCharts(); renderChat(); renderTodos(); renderCal();
+  syncNames(); renderHome(); renderHealth(); renderChat(); renderTodos(); renderCal(); entryCount();
   setInterval(function(){ if($('s-home').classList.contains('on')) renderHome(); },60000);
 })();
 </script>
