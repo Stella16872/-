@@ -1,6 +1,6 @@
 # Us — 双人陪伴页
 
-单文件 App 原型：`us.html`。手机浏览器打开就行，不需要服务器、不需要账号。
+单文件 App 原型：`us.html`。手机浏览器打开就行，不需要服务器、不需要账号，**也不需要联网**。
 
 ## 第一次打开
 
@@ -56,8 +56,16 @@
 暖象牙底 + 香槟金 + 灰调玫瑰。金和粉只做点缀：
 金在描边、纪念日弧、今日步数柱、小标题；粉在心形、心率线、经期弧、你的气泡；
 底色右上和左下各一处极淡晕染，叠一层细颗粒。
-标题 Cormorant Garamond（中文回落 Noto Serif SC / 宋体），正文中文用苹方。
-字体走 Google Fonts，取不到时回落系统衬线，iPhone 上是 New York + 宋体。
+标题 Cormorant Garamond，正文中文用苹方。
+
+**字体已内嵌进 HTML**，不联网也是对的样子。用的是可变字重版本（300–700 一个文件覆盖，
+拉丁子集 37.6 KB，base64 后约 50 KB），所以整个文件 133 KB。
+中文没法内嵌（一套中文衬线动辄几 MB），回落到系统宋体，iPhone 上是 Songti SC。
+Cormorant 默认是旧式数字（7、9 会掉到基线以下，0 长得像 O），已统一改成等高数字，
+需要对齐的数字再加等宽。
+
+> Cormorant Garamond：Copyright 2015 The Cormorant Project Authors
+> (github.com/CatharsisFonts/Cormorant)，SIL Open Font License 1.1。
 
 ## 存在哪
 
