@@ -298,6 +298,18 @@
   .as-line button{border:none;background:none;font-family:var(--sans);font-size:11px;letter-spacing:.1em;
     color:var(--gold-d);cursor:pointer;padding:2px 8px;border-radius:999px;background:rgba(196,160,99,.12);}
 
+  .msg{cursor:pointer;}
+  .msg-del{display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);
+    text-align:right;}
+  .msg.sel .msg-del{display:block;}
+  .msg-del button{border:none;background:none;cursor:pointer;font-family:var(--sans);
+    font-size:11.5px;letter-spacing:.1em;color:var(--rose-d);padding:2px 4px;}
+  .mo{cursor:pointer;}
+  .mo.editing{background:rgba(196,160,99,.09);border-radius:12px;
+    box-shadow:0 0 0 8px rgba(196,160,99,.09);}
+  .form .cancel{width:100%;background:none;border:none;color:var(--muted);font-size:12.5px;
+    padding:8px;cursor:pointer;font-family:var(--sans);margin-top:2px;}
+
   /* ---------- Diary ---------- */
   .day-card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);border:var(--edge);
     padding:16px;margin-top:16px;}
@@ -889,6 +901,7 @@
         <div class="seg sm" id="moRepeat" style="margin-top:12px"><div class="knob"></div>
           <button class="on" data-r="yearly">每年</button><button data-r="once">只此一次</button></div>
         <button class="btn-dark" id="moAdd" style="margin-top:12px">加一个</button>
+        <button class="cancel" id="moCancel" hidden>取消修改</button>
       </div>
       <div class="eyebrow sec-label">倒数中</div>
       <div class="plate" id="moList"></div>
@@ -1323,7 +1336,7 @@
   document.body.addEventListener('click',function(e){
     var g=e.target.closest('[data-go]'); if(!g) return;
     var id=g.dataset.go;
-    if(id==='sub-moments') renderMoments();
+    if(id==='sub-moments'){ moReset(); renderMoments(); }
     if(id==='sub-wishes') renderWishes();
     if(id==='sub-letters') renderLetters();
     if(id==='sub-entries'){ $('entQ').value=''; renderEntries(); }
@@ -1361,25 +1374,54 @@
     this.classList.toggle('right',b.dataset.r==='once');
     this.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});
   });
+  var moEdit=null;
+  function moReset(){
+    moEdit=null; $('moT').value=''; $('moD').value='';
+    $('moAdd').textContent='加一个'; $('moCancel').hidden=true;
+    $('moRepeat').classList.remove('right');
+    $('moRepeat').querySelectorAll('button').forEach(function(x,i){x.classList.toggle('on',i===0);});
+  }
+  $('moCancel').addEventListener('click',function(){ moReset(); renderMoments(); });
   $('moAdd').addEventListener('click',function(){
     var t=$('moT').value.trim(), d=$('moD').value;
     if(!t||!d){ $( t?'moD':'moT').focus(); return; }
-    moments.push({id:uid(),t:t,date:d,repeat:$('moRepeat').classList.contains('right')?'once':'yearly'});
-    smo(); $('moT').value=''; $('moD').value=''; renderMoments(); renderMini(); renderCounts(); renderCal();
+    var rep=$('moRepeat').classList.contains('right')?'once':'yearly';
+    if(moEdit){
+      moments.forEach(function(m){ if(m.id===moEdit){ m.t=t; m.date=d; m.repeat=rep; } });
+    } else {
+      moments.push({id:uid(),t:t,date:d,repeat:rep});
+    }
+    smo(); moReset(); renderMoments(); renderMini(); renderCounts(); renderCal();
   });
+  function editMoment(id){
+    var m=moments.filter(function(x){return x.id===id;})[0]; if(!m) return;
+    moEdit=id; $('moT').value=m.t; $('moD').value=m.date;
+    $('moRepeat').classList.toggle('right',m.repeat==='once');
+    $('moRepeat').querySelectorAll('button').forEach(function(x){
+      x.classList.toggle('on',x.dataset.r===m.repeat);
+    });
+    $('moAdd').textContent='保存修改'; $('moCancel').hidden=false;
+    renderMoments();
+    $('moT').focus();
+    $('sub-moments').querySelector('.sub-body').scrollTop=0;
+  }
   function renderMoments(){
     $('moList').innerHTML=moments.length?sortedMoments().map(function(m){
       var x=nextOf(m);
-      return '<div class="mo"><div class="mt"><b>'+esc(m.t)+'</b><span>'+fmtMD(x.date)+
+      return '<div class="mo'+(moEdit===m.id?' editing':'')+'" data-moe="'+m.id+'"><div class="mt"><b>'+esc(m.t)+'</b><span>'+fmtMD(x.date)+
         (m.repeat==='yearly'?' · 每年':'')+'</span></div>'+
         '<div class="mn">'+(x.past?Math.abs(x.days):x.days)+'<small>'+(x.past?'天前':'天')+'</small></div>'+
         '<button class="del" data-mo="'+m.id+'">&times;</button></div>';
     }).join(''):'<div class="empty">还没有记下任何日子</div>';
   }
   $('moList').addEventListener('click',function(e){
-    var b=e.target.closest('[data-mo]'); if(!b) return;
-    moments=moments.filter(function(m){return m.id!==b.dataset.mo;});
-    smo(); renderMoments(); renderMini(); renderCounts(); renderCal();
+    var b=e.target.closest('[data-mo]');
+    if(b){
+      if(moEdit===b.dataset.mo) moReset();
+      moments=moments.filter(function(m){return m.id!==b.dataset.mo;});
+      smo(); renderMoments(); renderMini(); renderCounts(); renderCal(); return;
+    }
+    var r=e.target.closest('[data-moe]'); if(r) editMoment(r.dataset.moe);
   });
 
   /* ---------- 心愿单 ---------- */
@@ -1443,13 +1485,14 @@
     $('chatCount').textContent=chat.length?chat.length+' 条':'还没有消息';
     if(!chat.length){ $('msgs').innerHTML='<div class="empty">这里只有你们俩。<br>写下第一句吧。</div>'; return; }
     var last='';
-    $('msgs').innerHTML=chat.map(function(m){
+    $('msgs').innerHTML=chat.map(function(m,i){
       var head='';
       if(m.d!==last){ last=m.d; var dd=ymd(m.d);
         head='<div class="chat-day">'+(diffDays(dd,new Date())===0?'Today':fmtMD(dd))+'</div>'; }
-      return head+'<div class="msg '+(m.me?'me':'them')+'">'+
+      return head+'<div class="msg '+(m.me?'me':'them')+'" data-mi="'+i+'">'+
         (m.me?'':'<div class="who">'+esc(cfg.partner)+'</div>')+
-        esc(m.t)+'<div class="at">'+esc(m.at)+'</div></div>';
+        esc(m.t)+'<div class="at">'+esc(m.at)+'</div>'+
+        '<div class="msg-del"><button data-mdel="'+i+'">删除这条</button></div></div>';
     }).join('');
     var w=$('s-chats'); setTimeout(function(){ w.scrollTop=w.scrollHeight; },40);
   }
@@ -1463,6 +1506,14 @@
   $('msgInput').addEventListener('input',function(){ $('msgSend').classList.toggle('active',!!this.value.trim()); });
   $('msgInput').addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();sendMsg();} });
   $('asWho').addEventListener('click',function(){ asMe=!asMe; $('asWho').textContent=asMe?cfg.you:cfg.partner; });
+  $('msgs').addEventListener('click',function(e){
+    var d=e.target.closest('[data-mdel]');
+    if(d){ chat.splice(+d.dataset.mdel,1); sm(); renderChat(); return; }
+    var m=e.target.closest('[data-mi]'); if(!m) return;
+    var was=m.classList.contains('sel');
+    $('msgs').querySelectorAll('.msg.sel').forEach(function(x){x.classList.remove('sel');});
+    if(!was) m.classList.add('sel');
+  });
 
   /* ============ 日记 / 待办 / 月历 ============ */
   var who='me', calDate=new Date();
