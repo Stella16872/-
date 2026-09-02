@@ -299,6 +299,14 @@
     color:var(--gold-d);cursor:pointer;padding:2px 8px;border-radius:999px;background:rgba(196,160,99,.12);}
 
   .msg{cursor:pointer;}
+  .msg.typing{cursor:default;display:flex;gap:5px;align-items:center;padding:16px 18px;}
+  .msg.typing i{width:6px;height:6px;border-radius:999px;background:var(--faint);display:block;
+    animation:blink 1.3s infinite;}
+  .msg.typing i:nth-child(2){animation-delay:.18s;}
+  .msg.typing i:nth-child(3){animation-delay:.36s;}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+  .msg.err{background:rgba(192,124,134,.12);border-color:rgba(192,124,134,.4);
+    color:var(--rose-d);font-size:13px;align-self:center;max-width:90%;text-align:center;cursor:default;}
   .msg-del{display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);
     text-align:right;}
   .msg.sel .msg-del{display:block;}
@@ -988,6 +996,9 @@
     <div class="field"><label>天气</label><input id="f-weather" placeholder="今天天气怎么样"></div>
     <div class="field"><label>今日低语</label><input id="f-whisper" placeholder="今天想说的一句话"></div>
     <div class="field"><label>上次月经</label><input id="f-cycle" type="date"></div>
+    <div class="hint" style="margin:16px 0 0">让 Ta 真的回话（可留空）</div>
+    <div class="field"><label>接口地址</label><input id="f-api" placeholder="https://….workers.dev"></div>
+    <div class="field"><label>暗号</label><input id="f-secret" placeholder="和 Worker 里设的一样"></div>
     <div class="hint" style="margin:16px 0 0">外观</div>
     <div class="theme-row" id="themeRow">
       <button data-t="auto">跟随系统</button><button data-t="light">浅色</button><button data-t="dark">深色</button>
@@ -1005,7 +1016,7 @@
   'use strict';
   var $=function(i){return document.getElementById(i);}, DAY=86400000, K='us.v2.';
 
-  var DEFAULTS={you:'',partner:'',start:'',weather:'',whisper:'',cycleStart:'',cycleLen:28,theme:'auto',ready:false};
+  var DEFAULTS={you:'',partner:'',start:'',weather:'',whisper:'',cycleStart:'',cycleLen:28,theme:'auto',ready:false,api:'',secret:''};
   function get(k,d){ try{var r=localStorage.getItem(K+k); if(r!=null) return JSON.parse(r);}catch(e){} return d; }
   function put(k,v){ try{localStorage.setItem(K+k,JSON.stringify(v));}catch(e){} }
   // Safari 直接打开本地文件时会禁用 localStorage，先探一下，探不到就明说
@@ -1482,7 +1493,7 @@
   var asMe=true;
   function renderChat(){
     $('asWho').textContent=asMe?cfg.you:cfg.partner;
-    $('chatCount').textContent=chat.length?chat.length+' 条':'还没有消息';
+    $('chatCount').textContent=(cfg.api?'已接上 · ':'')+(chat.length?chat.length+' 条':'还没有消息');
     if(!chat.length){ $('msgs').innerHTML='<div class="empty">这里只有你们俩。<br>写下第一句吧。</div>'; return; }
     var last='';
     $('msgs').innerHTML=chat.map(function(m,i){
@@ -1501,6 +1512,50 @@
     chat.push({me:asMe?1:0,t:v,d:key(new Date()),
       at:new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
     sm(); $('msgInput').value=''; $('msgSend').classList.remove('active'); renderChat();
+    if(asMe && cfg.api) askPartner();
+  }
+
+  /* ---- 让 Ta 回一句：请求打到你自己的中转，密钥在那边，不在这里 ---- */
+  var asking=false;
+  function chatContext(){
+    var now=new Date(), tk=key(now), start=ymd(cfg.start);
+    var td=(todos.me||[]).filter(function(x){return !x.d;}).slice(0,5)
+      .map(function(x){return x.t;}).join('、');
+    return {you:cfg.you, partner:cfg.partner,
+      day:diffDays(start,now)+1,
+      whisper:cfg.whisper||'',
+      todos:td,
+      closeness:closeness[tk]};
+  }
+  function askPartner(){
+    if(asking) return; asking=true;
+    var wrap=$('msgs');
+    var bub=document.createElement('div');
+    bub.className='msg them typing'; bub.innerHTML='<i></i><i></i><i></i>';
+    wrap.appendChild(bub);
+    var sc=$('s-chats'); sc.scrollTop=sc.scrollHeight;
+    fetch(cfg.api,{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({
+        secret:cfg.secret||undefined,
+        context:chatContext(),
+        messages:chat.slice(-30).map(function(m){
+          return {role:m.me?'user':'assistant', content:m.t};
+        })
+      })})
+      .then(function(r){ return r.json().then(function(d){
+        if(!r.ok) throw new Error(d && d.error ? d.error : ('HTTP '+r.status)); return d; }); })
+      .then(function(d){
+        chat.push({me:0,t:d.text,d:key(new Date()),
+          at:new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
+        sm(); asking=false; renderChat();
+      })
+      .catch(function(e){
+        asking=false; renderChat();
+        var er=document.createElement('div');
+        er.className='msg err'; er.textContent='没能收到回复：'+e.message;
+        $('msgs').appendChild(er);
+        var s2=$('s-chats'); s2.scrollTop=s2.scrollHeight;
+      });
   }
   $('msgSend').addEventListener('click',sendMsg);
   $('msgInput').addEventListener('input',function(){ $('msgSend').classList.toggle('active',!!this.value.trim()); });
@@ -1685,6 +1740,7 @@
   function openSheet(){
     $('f-you').value=cfg.you; $('f-partner').value=cfg.partner; $('f-start').value=cfg.start;
     $('f-weather').value=cfg.weather; $('f-whisper').value=cfg.whisper; $('f-cycle').value=cfg.cycleStart||'';
+    $('f-api').value=cfg.api||''; $('f-secret').value=cfg.secret||'';
     $('mask').classList.add('on'); $('sheet').classList.add('on');
   }
   function closeSheet(){ $('mask').classList.remove('on'); $('sheet').classList.remove('on'); }
@@ -1700,6 +1756,7 @@
     cfg.partner=$('f-partner').value.trim()||cfg.partner;
     cfg.start=$('f-start').value||cfg.start;
     cfg.weather=$('f-weather').value; cfg.whisper=$('f-whisper').value; cfg.cycleStart=$('f-cycle').value||'';
+    cfg.api=$('f-api').value.trim(); cfg.secret=$('f-secret').value.trim();
     if(oldW&&cfg.whisper!==oldW){ whispers.unshift({d:key(new Date()),t:oldW}); whispers=whispers.slice(0,60); sw(); }
     sc(); closeSheet(); syncNames(); renderHome(); renderChat(); renderTodos(); renderCal();
   });

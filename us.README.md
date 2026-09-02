@@ -110,3 +110,40 @@ Safari 打开 → 分享 → 添加到主屏幕。已加全屏 meta，从桌面�
 几个需要特殊处理的项目写在 `projects.html` 里的 `OVERRIDE`：
 Simulator 根目录没有 index.html 所以链接带文件名；`-` 拆成 Us 和年上・信两条；
 article-generator（Flask 后端）和 desktop-pet（桌面程序）标为 Pages 跑不了。
+
+---
+
+# 让 Ta 真的回话（worker.js）
+
+Chats 里的对方默认只是个占位——你写什么它都不会回。想让它真的由 Claude 来回，
+需要一个中转，因为 **API 密钥绝对不能写进 `us.html`**（仓库是公开的，等于把
+账号余额挂在网上）。`worker.js` 就是这个中转，也是唯一碰到密钥的地方。
+
+## 部署（全程在浏览器里点，不用装任何东西）
+
+1. console.anthropic.com 生成一个 API key，账户里充点钱
+2. dash.cloudflare.com → Workers & Pages → Create → Create Worker → 起名 → Deploy
+3. Edit code，把 `worker.js` 全部内容粘进去 → Deploy
+4. Settings → Variables and Secrets，加两条 **Secret**：
+   - `ANTHROPIC_API_KEY` — 第 1 步的 key
+   - `SHARED_SECRET` — 你自己编一串暗号
+5. 打开 app → 设置 → 填「接口地址」（Worker 网址）和「暗号」（和上面一致）
+
+配好后 Chats 顶部会显示「已接上」。你以自己的身份发消息，Ta 就会回；
+以 Ta 的身份发则不会触发（那是你替他写）。
+
+## 会发送什么
+
+每次只带：两个人的名字、在一起第几天、你今天的低语、你今天没做完的待办、
+今天的亲密度，加上最近 30 条对话。
+
+**日记不会发送。** 那是最私密的部分，默认留在本机。想让它也知道，跟我说。
+
+## 几件要知道的事
+
+- **它不是同一个 Claude。** 不记得你和 Claude Code 里聊过什么，只知道上面
+  那些每次带过去的内容。
+- 模型默认 `claude-opus-5`。想省钱在 Worker 里加环境变量 `MODEL`，
+  换成 `claude-sonnet-5` 或 `claude-haiku-4-5`。
+- Worker 里有限流：一次最多 40 轮、总字数 12000，防止网址被人捡去跑大任务。
+- 出错时聊天里会出现一条粉色提示，写明原因（暗号不对、余额不足等）。
