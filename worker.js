@@ -16,12 +16,13 @@
  * 可选环境变量：
  *   MODEL        默认 claude-opus-5。想省钱可换 claude-sonnet-5 或 claude-haiku-4-5
  *   ALLOW_ORIGIN 默认允许所有来源；填上你的网址可以更严一点
+ *   BASE_URL     默认 https://api.anthropic.com。用中转站就填它给你的地址
+ *   API_FORMAT   默认 anthropic。中转站若是 OpenAI 格式就填 openai
  *
  * 注：这里用原生 fetch 而不是官方 SDK，是为了让整个文件能直接粘进
  * Cloudflare 网页编辑器——用 SDK 就需要 npm 和构建步骤。
  */
 
-const API = 'https://api.anthropic.com/v1/messages';
 const MAX_MESSAGES = 40;      // 一次最多带多少轮对话
 const MAX_CHARS = 12000;      // 整体字数上限，防止被人拿去跑大任务
 
@@ -87,37 +88,49 @@ export default {
       '你不记得应用之外发生的事，别假装记得——不确定就直接问。',
     ].filter(Boolean).join('\n');
 
+    const base = (env.BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '');
+    const openai = (env.API_FORMAT || 'anthropic').toLowerCase() === 'openai';
+    const model = env.MODEL || 'claude-opus-5';
+
+    // 两种格式：官方（及兼容官方的中转）走 /v1/messages，
+    // OpenAI 格式的中转走 /v1/chat/completions，system 要塞进 messages 第一条
+    const url = base + (openai ? '/v1/chat/completions' : '/v1/messages');
+    const headers = openai
+      ? { 'content-type': 'application/json',
+          'authorization': 'Bearer ' + env.ANTHROPIC_API_KEY }
+      : { 'content-type': 'application/json',
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01' };
+    const payload = openai
+      ? { model, max_tokens: 2000,
+          messages: [{ role: 'system', content: system }].concat(clean) }
+      : { model, max_tokens: 2000, system, messages: clean };
+
     let r;
     try {
-      r = await fetch(API, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: env.MODEL || 'claude-opus-5',
-          max_tokens: 2000,          // 聊天场景，回复本来就短
-          system,
-          messages: clean,
-        }),
-      });
+      r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
     } catch (e) {
-      return json({ error: '连不上 Anthropic：' + e.message }, 502);
+      return json({ error: '连不上接口：' + e.message }, 502);
     }
 
     const data = await r.json().catch(() => null);
     if (!r.ok) {
-      const msg = (data && data.error && data.error.message) || ('HTTP ' + r.status);
-      return json({ error: msg }, r.status);
+      const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + r.status);
+      return json({ error: typeof msg === 'string' ? msg : JSON.stringify(msg) }, r.status);
     }
     if (data && data.stop_reason === 'refusal') {
       return json({ text: '这句我答不上来，换个说法？' });
     }
-    const text = (data && Array.isArray(data.content) ? data.content : [])
-      .filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-    return json({ text: text || '（没说出话来，再试一次？）' });
+
+    let text = '';
+    if (openai) {
+      text = String(((data.choices || [])[0] || {}).message?.content || '').trim();
+    } else {
+      text = (Array.isArray(data.content) ? data.content : [])
+        .filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    }
+    // 中转站有时会偷换模型，回一句实际用的是什么，方便你核对
+    return json({ text: text || '（没说出话来，再试一次？）', model: data.model || model });
   },
 };
 

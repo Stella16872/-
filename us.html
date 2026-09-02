@@ -1493,7 +1493,9 @@
   var asMe=true;
   function renderChat(){
     $('asWho').textContent=asMe?cfg.you:cfg.partner;
-    $('chatCount').textContent=(cfg.api?'已接上 · ':'')+(chat.length?chat.length+' 条':'还没有消息');
+    $('chatCount').textContent=cfg.api
+      ? (lastModel?lastModel.replace(/^claude-/,''):'已接上')+' · '+(chat.length||0)+' 条'
+      : (chat.length?chat.length+' 条':'还没有消息');
     if(!chat.length){ $('msgs').innerHTML='<div class="empty">这里只有你们俩。<br>写下第一句吧。</div>'; return; }
     var last='';
     $('msgs').innerHTML=chat.map(function(m,i){
@@ -1516,7 +1518,7 @@
   }
 
   /* ---- 让 Ta 回一句：请求打到你自己的中转，密钥在那边，不在这里 ---- */
-  var asking=false;
+  var asking=false, lastModel='';
   function chatContext(){
     var now=new Date(), tk=key(now), start=ymd(cfg.start);
     var td=(todos.me||[]).filter(function(x){return !x.d;}).slice(0,5)
@@ -1545,6 +1547,7 @@
       .then(function(r){ return r.json().then(function(d){
         if(!r.ok) throw new Error(d && d.error ? d.error : ('HTTP '+r.status)); return d; }); })
       .then(function(d){
+        if(d.model) lastModel=String(d.model);   // 中转站实际给的是哪个模型
         chat.push({me:0,t:d.text,d:key(new Date()),
           at:new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
         sm(); asking=false; renderChat();
