@@ -146,11 +146,29 @@ Chats 里的对方默认只是个占位——你写什么它都不会回。想�
 - 模型默认 `claude-opus-5`。想省钱在 Worker 里加环境变量 `MODEL`，
   换成 `claude-sonnet-5` 或 `claude-haiku-4-5`。陪伴式的短对话，Haiku 就够。
 
+## 接 DeepSeek（或别家）
+
+Worker 里三条环境变量：
+
+| 变量 | 填什么 |
+|---|---|
+| `BASE_URL` | `https://api.deepseek.com` |
+| `API_FORMAT` | `openai` |
+| `MODEL` | `deepseek-chat`（要会推理的用 `deepseek-reasoner`） |
+
+密钥那条改叫 `API_KEY`（老的 `ANTHROPIC_API_KEY` 仍然认）。
+地址写 `https://api.deepseek.com`、`.../v1`、或写全 `.../chat/completions` 都行，
+Worker 会自己补齐，不会拼出 `/v1/v1/`。
+
+DeepSeek 比 Claude 便宜一个数量级，对陪伴式短对话完全够用。
+只是它跟 Claude 是两个不同的模型，说话的味道不一样，你试试看喜不喜欢。
+
 ## 用第三方中转站
 
 Worker 支持把请求转去别的地址，加两个环境变量即可：
 
-- `BASE_URL` — 中转站给你的地址（默认 `https://api.anthropic.com`）
+- `BASE_URL` — 中转站给你的地址（默认 `https://api.anthropic.com`）；写到域名、
+  写到 `/v1`、或写全路径都可以
 - `API_FORMAT` — 中转站若是 OpenAI 格式（`/v1/chat/completions` + `Bearer`）就填
   `openai`；兼容官方格式的填 `anthropic` 或不填
 

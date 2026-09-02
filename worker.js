@@ -16,8 +16,13 @@
  * 可选环境变量：
  *   MODEL        默认 claude-opus-5。想省钱可换 claude-sonnet-5 或 claude-haiku-4-5
  *   ALLOW_ORIGIN 默认允许所有来源；填上你的网址可以更严一点
- *   BASE_URL     默认 https://api.anthropic.com。用中转站就填它给你的地址
- *   API_FORMAT   默认 anthropic。中转站若是 OpenAI 格式就填 openai
+ *   BASE_URL     默认 https://api.anthropic.com。换别家就填它的地址
+ *   API_FORMAT   默认 anthropic。DeepSeek / 中转站等 OpenAI 格式填 openai
+ *
+ * 接 DeepSeek 的话三条环境变量：
+ *   BASE_URL   = https://api.deepseek.com
+ *   API_FORMAT = openai
+ *   MODEL      = deepseek-chat
  *
  * 注：这里用原生 fetch 而不是官方 SDK，是为了让整个文件能直接粘进
  * Cloudflare 网页编辑器——用 SDK 就需要 npm 和构建步骤。
@@ -43,7 +48,8 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
     if (request.method !== 'POST') return json({ error: '只收 POST' }, 405);
-    if (!env.ANTHROPIC_API_KEY) return json({ error: 'Worker 还没设置 ANTHROPIC_API_KEY' }, 500);
+    const KEY = env.API_KEY || env.ANTHROPIC_API_KEY;
+    if (!KEY) return json({ error: 'Worker 还没设置 API_KEY' }, 500);
 
     let body;
     try { body = await request.json(); }
@@ -94,12 +100,16 @@ export default {
 
     // 两种格式：官方（及兼容官方的中转）走 /v1/messages，
     // OpenAI 格式的中转走 /v1/chat/completions，system 要塞进 messages 第一条
-    const url = base + (openai ? '/v1/chat/completions' : '/v1/messages');
+    // 地址容错：写全路径就照用；只到 /v1 就不再补 v1；只有域名才补全
+    const tail = openai ? '/chat/completions' : '/messages';
+    const url = /\/(chat\/completions|messages)$/.test(base) ? base
+              : /\/v\d+$/.test(base)                        ? base + tail
+              :                                                 base + '/v1' + tail;
     const headers = openai
       ? { 'content-type': 'application/json',
-          'authorization': 'Bearer ' + env.ANTHROPIC_API_KEY }
+          'authorization': 'Bearer ' + KEY }
       : { 'content-type': 'application/json',
-          'x-api-key': env.ANTHROPIC_API_KEY,
+          'x-api-key': KEY,
           'anthropic-version': '2023-06-01' };
     const payload = openai
       ? { model, max_tokens: 2000,
@@ -115,8 +125,11 @@ export default {
 
     const data = await r.json().catch(() => null);
     if (!r.ok) {
-      const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + r.status);
-      return json({ error: typeof msg === 'string' ? msg : JSON.stringify(msg) }, r.status);
+      let msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + r.status);
+      if (typeof msg !== 'string') msg = JSON.stringify(msg);
+      if (r.status === 404) msg += '（地址可能不对，试试把 BASE_URL 换成 ' + base + '/v1 或去掉 /v1）';
+      if (r.status === 401) msg += '（API_KEY 不对，或者格式选错了）';
+      return json({ error: msg }, r.status);
     }
     if (data && data.stop_reason === 'refusal') {
       return json({ text: '这句我答不上来，换个说法？' });
