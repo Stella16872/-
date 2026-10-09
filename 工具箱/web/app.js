@@ -7,7 +7,7 @@
   var S = {
     settings: null, presets: {}, table: null, files: [], preview: null,
     cur: 0, excluded: {}, filter: 'all', job: null, lastField: null, templates: [],
-    editingAcct: false
+    editingAcct: false, ruleAuto: false
   };
 
   // ------------------------------------------------------------ 小工具
@@ -261,6 +261,7 @@
   }
   function insertVar(col) {
     var el = S.lastField || $('tBody');
+    if (el.id === 'tRule') S.ruleAuto = false;
     var text = '{' + col + '}';
     var a = el.selectionStart == null ? el.value.length : el.selectionStart;
     var b = el.selectionEnd == null ? a : el.selectionEnd;
@@ -298,12 +299,15 @@
     var common = S.files.filter(function (f) { return f.group === 'common'; });
     var folder = S.files.filter(function (f) { return f.group === 'folder'; });
     $('commonList').innerHTML = common.map(function (f) {
-      return '<span class="chip">' + esc(f.name) + ' <span class="size">' + size(f.size) +
+      return '<span class="chip"><a class="open" href="' + fileUrl(f) + '" target="_blank" title="点开看看">' + esc(f.name) +
+        '</a> <span class="size">' + size(f.size) + (f.converted_from ? ' · 已从 HEIC 转成 JPG' : '') +
         '</span><button class="x" data-id="' + f.id + '" title="去掉">×</button></span>';
     }).join('');
     if (folder.length) {
       var total = folder.reduce(function (s, f) { return s + f.size; }, 0);
-      $('folderInfo').textContent = '已选 ' + folder.length + ' 个文件（' + size(total) + '）';
+      var conv = folder.filter(function (f) { return f.converted_from; }).length;
+      $('folderInfo').textContent = '已选 ' + folder.length + ' 个文件（' + size(total) + '）' +
+        (conv ? '，其中 ' + conv + ' 张 HEIC 照片已转成 JPG' : '');
       $('folderClear').hidden = false;
     } else {
       $('folderInfo').textContent = '还没选';
@@ -321,6 +325,24 @@
     }
     return next();
   }
+  // 看文件名的规律，猜「文件名规则」该怎么填
+  function guessRule(files) {
+    var col = S.table.columns.filter(function (c) { return /姓名|名字|名称|name/i.test(c); })[0];
+    if (!col) return null;
+    var names = S.table.rows.map(function (r) { return r[col]; }).filter(Boolean);
+    var score = { exact: 0, under: 0, dir: 0, prefix: 0 };
+    names.forEach(function (n) {
+      var hit = function (test) { return files.some(test); };
+      if (hit(function (f) { return f.name.replace(/\.[^.]+$/, '') === n; })) score.exact++;
+      if (hit(function (f) { return f.name.indexOf(n + '_') === 0; })) score.under++;
+      if (hit(function (f) { return f.rel.indexOf(n + '/') === 0; })) score.dir++;
+      if (hit(function (f) { return f.name.indexOf(n) === 0; })) score.prefix++;
+    });
+    var rules = { exact: '{c}', under: '{c}_*', dir: '{c}/*', prefix: '{c}*' };
+    var best = 'exact';
+    ['under', 'dir', 'prefix'].forEach(function (k) { if (score[k] > score[best]) best = k; });
+    return rules[best].replace('c', col);
+  }
   function skipFile(f) {
     var n = f.name;
     return n.charAt(0) === '.' || n.indexOf('~$') === 0 || n === 'Thumbs.db' || n === 'desktop.ini';
@@ -329,7 +351,10 @@
     FIELDS.forEach(function (id) {
       var el = $(id);
       el.addEventListener('focus', function () { S.lastField = el; });
-      el.addEventListener('input', function () { saveDraft(); refreshPreview(); braceHint(); });
+      el.addEventListener('input', function (e) {
+        if (id === 'tRule' && e.isTrusted) S.ruleAuto = false;
+        saveDraft(); refreshPreview(); braceHint();
+      });
     });
     $('vars').addEventListener('mousedown', function (e) {
       var b = e.target.closest('.var'); if (!b) return;
@@ -358,9 +383,9 @@
         return uploadMany(list, 'folder', function (i, n) { $('folderInfo').textContent = '正在读取 ' + i + ' / ' + n + '…'; });
       }).then(function (added) {
         S.files = S.files.concat(added); renderFiles();
-        if (!$('tRule').value.trim() && S.table) {
-          var nameCol = S.table.columns.filter(function (c) { return /姓名|名字|name/i.test(c); })[0];
-          if (nameCol) { $('tRule').value = '{' + nameCol + '}'; saveDraft(); }
+        if ((!$('tRule').value.trim() || S.ruleAuto) && S.table) {
+          var rule = guessRule(added);
+          if (rule) { $('tRule').value = rule; S.ruleAuto = true; saveDraft(); }
         }
         refreshPreview();
       }).catch(function (e) { renderFiles(); fail(e); });
@@ -440,6 +465,12 @@
     $('filters').innerHTML = f.filter(function (x) { return x[0] === 'all' || x[2]; }).map(function (x) {
       return '<button class="pill' + (S.filter === x[0] ? ' on' : '') + '" data-f="' + x[0] + '">' + x[1] + '<b>' + x[2] + '</b></button>';
     }).join('');
+    var unused = p.unused || [];
+    $('unusedHint').hidden = !unused.length;
+    if (unused.length) {
+      $('unusedHint').textContent = '附件文件夹里有 ' + unused.length + ' 个文件没有对应的人，不会发出去：' +
+        unused.slice(0, 8).join('、') + (unused.length > 8 ? ' 等' : '') + '。是不是表格里的名字和文件名写得不一样？';
+    }
     $('checkSide').innerHTML = nBad ? '<span class="badge bad">' + nBad + ' 封有问题，不会发</span>' :
       '<span class="badge ok">都没问题</span>';
     $('s4').classList.toggle('done', !nBad);
@@ -476,8 +507,9 @@
       (it.bcc.length ? '<dt>密送</dt><dd>' + esc(it.bcc.join(', ')) + '</dd>' : '') +
       '<dt>主题</dt><dd class="mail-subject">' + esc(it.subject || '（没有主题）') + '</dd>' +
       (it.attachments.length ? '<dt>附件</dt><dd><div class="chips">' + it.attachments.map(function (a) {
-        return '<span class="chip">' + esc(a.name) + ' <span class="size">' + size(a.size) + '</span>&nbsp;</span>';
-      }).join('') + '</div></dd>' : '') + '</dl>';
+        return '<a class="chip open" href="' + fileUrl(a) + '" target="_blank" title="点开看看">' + esc(a.name) +
+          ' <span class="size">' + size(a.size) + '</span>&nbsp;</a>';
+      }).join('') + '</div>' + thumbs(it.attachments) + '</dd>' : '') + '</dl>';
     h += '<div class="mail-body">' + (it.body ? esc(it.body) : '<span class="muted">（正文是空的）</span>') + '</div>';
     if (it.errors.length || it.warnings.length) {
       h += '<div class="mail-problems">' + it.errors.map(function (e) { return '<div class="bad">✕ ' + esc(e) + '</div>'; }).join('') +
@@ -485,6 +517,15 @@
     }
     $('mailPreview').innerHTML = h;
     $('testBtn').disabled = !!it.errors.length;
+  }
+  function fileUrl(f) { return '/api/file?id=' + encodeURIComponent(f.id) + '&t=' + encodeURIComponent(TOKEN); }
+  function thumbs(list) {
+    var imgs = list.filter(function (f) { return f.image; });
+    if (!imgs.length) return '';
+    return '<div class="thumbs">' + imgs.map(function (f) {
+      return '<a href="' + fileUrl(f) + '" target="_blank" title="' + esc(f.name) + '"><img src="' + fileUrl(f) +
+        '" alt="' + esc(f.name) + '" loading="lazy"></a>';
+    }).join('') + '</div>';
   }
   function bindCheck() {
     $('filters').addEventListener('click', function (e) {

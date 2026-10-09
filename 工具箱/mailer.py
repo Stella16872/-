@@ -189,6 +189,54 @@ def match_attachments(rule_template, row, columns, files):
     return picked, errors, warnings
 
 
+# ---------------------------------------------------------------- 文件类型
+
+# Mac 自带的 Python 认不全 Office 和新的图片格式，这里补上。类型对了，对方邮箱才能直接预览。
+FILE_TYPES = {
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.pages': 'application/vnd.apple.pages',
+    '.numbers': 'application/vnd.apple.numbers',
+    '.key': 'application/vnd.apple.keynote',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
+    '.rtf': 'application/rtf',
+    '.zip': 'application/zip',
+    '.rar': 'application/vnd.rar',
+    '.7z': 'application/x-7z-compressed',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+    '.bmp': 'image/bmp',
+    '.tif': 'image/tiff',
+    '.tiff': 'image/tiff',
+    '.svg': 'image/svg+xml',
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+}
+
+
+def guess_type(filename):
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in FILE_TYPES:
+        return FILE_TYPES[ext]
+    ctype, encoding = mimetypes.guess_type(filename)
+    if ctype is None or encoding is not None:
+        return 'application/octet-stream'
+    return ctype
+
+
 # ---------------------------------------------------------------- 拼邮件
 
 def _encode_word(s):
@@ -217,10 +265,7 @@ def build_message(sender_name, sender_addr, to, cc, subject, body, attachments):
     msgid = make_msgid(domain=domain)
     msg['Message-ID'] = msgid
     for path, filename in attachments:
-        ctype, encoding = mimetypes.guess_type(filename)
-        if ctype is None or encoding is not None:
-            ctype = 'application/octet-stream'
-        maintype, subtype = ctype.split('/', 1)
+        maintype, subtype = guess_type(filename).split('/', 1)
         part = MIMEBase(maintype, subtype)
         with open(path, 'rb') as fp:
             part.set_payload(fp.read())

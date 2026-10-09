@@ -201,6 +201,9 @@ def prepare(template, row, columns, files_common, files_folder):
     errors += e4
     warnings += w4
     attachments = list(files_common) + [f for f in picked if f not in files_common]
+    for f in attachments:
+        if os.path.splitext(f['name'])[1].lower() in ('.heic', '.heif'):
+            warnings.append('「%s」是 iPhone 的 HEIC 格式，Windows 电脑可能打不开，最好先转成 JPG' % f['name'])
     size = sum(f['size'] for f in attachments)
     if size > 18 * 1024 * 1024:
         warnings.append('附件一共 %.1f MB，可能超过邮箱的大小限制（一般 20 MB 左右）' % (size / 1048576))
@@ -208,7 +211,7 @@ def prepare(template, row, columns, files_common, files_folder):
     errors = list(dict.fromkeys(errors))
     warnings = list(dict.fromkeys(warnings))
     return {'row': row.get('_row'), 'to': to, 'cc': cc, 'bcc': bcc, 'subject': subject, 'body': body,
-            'attachments': attachments, 'size': size, 'errors': errors, 'warnings': warnings}
+            'attachments': attachments, 'picked': picked, 'size': size, 'errors': errors, 'warnings': warnings}
 
 
 def preview_all(template):
@@ -230,19 +233,32 @@ def preview_all(template):
         if hits:
             it['warnings'].append('%s 已经给这个人发过同样主题的邮件' % max(hits)[5:16])
         items.append(it)
+    owners = {}  # 文件夹里的文件 → 哪几行会带上它
+    for it in items:
+        for f in it['picked']:
+            owners.setdefault(f['id'], []).append(it['row'])
     for it in items:
         for a in it['to']:
             rows = seen[a.lower()]
             if len(rows) > 1:
                 others = '、'.join(str(r) for r in rows if r != it['row'])
                 it['warnings'].append('%s 在第 %s 行也出现了，会收到不止一封' % (a, others))
-    return {'items': [_public_item(it) for it in items],
+        for f in it['picked']:
+            rows = owners[f['id']]
+            if len(rows) > 1:
+                others = '、'.join(str(r) for r in rows if r != it['row'])
+                it['warnings'].append('附件「%s」也会发给第 %s 行的人，确认一下没有发错' % (f['name'], others))
+    unused = []
+    if (template.get('rule') or '').strip():
+        unused = sorted(f['rel'] for f in folder if f['id'] not in owners)
+    return {'items': [_public_item(it) for it in items], 'unused': unused,
             'used': mailer.used_columns(' '.join(str(v) for v in template.values()), columns)}
 
 
 def _public_item(it):
     out = dict(it)
-    out['attachments'] = [{'name': f['name'], 'size': f['size']} for f in it['attachments']]
+    del out['picked']
+    out['attachments'] = [_file_public(f) for f in it['attachments']]
     return out
 
 
@@ -470,7 +486,10 @@ def _table_summary(t):
 
 
 def _file_public(f):
-    return {'id': f['id'], 'group': f['group'], 'name': f['name'], 'rel': f['rel'], 'size': f['size']}
+    ctype = mailer.guess_type(f['name'])
+    return {'id': f['id'], 'group': f['group'], 'name': f['name'], 'rel': f['rel'], 'size': f['size'],
+            'image': ctype.startswith('image/') and ctype not in ('image/heic', 'image/heif', 'image/tiff'),
+            'converted_from': f.get('converted_from')}
 
 
 def _settings_public():
@@ -566,9 +585,31 @@ def api_upload_file(q, body):
     with open(path, 'wb') as f:
         f.write(body)
     info = {'id': fid, 'group': group, 'name': name, 'rel': rel, 'path': path, 'size': len(body)}
+    if os.path.splitext(name)[1].lower() in ('.heic', '.heif'):
+        jpg = _heic_to_jpg(path)
+        if jpg:
+            info.update(converted_from=name, name=os.path.basename(jpg), path=jpg, size=os.path.getsize(jpg),
+                        rel=os.path.splitext(rel)[0] + '.jpg')
     with STATE.lock:
         STATE.files[fid] = info
     return _file_public(info)
+
+
+def _heic_to_jpg(path):
+    """iPhone 照片（HEIC）转成 JPG，对方用 Windows 也能打开。用的是 Mac 自带的 sips；转不了就返回 None。"""
+    sips = shutil.which('sips')
+    if not sips:
+        return None
+    out = os.path.splitext(path)[0] + '.jpg'
+    try:
+        r = subprocess.run([sips, '-s', 'format', 'jpeg', path, '--out', out],
+                           capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0 or not os.path.exists(out):
+        return None
+    os.remove(path)
+    return out
 
 
 def api_remove_files(_q, b):
@@ -735,6 +776,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_file(self, fid):
+        with STATE.lock:
+            f = STATE.files.get(fid)
+        if not f or not os.path.exists(f['path']):
+            return self._send(404, {'error': '这个文件已经不在了，请重新选一次。'})
+        with open(f['path'], 'rb') as fp:
+            data = fp.read()
+        self.send_response(200)
+        self.send_header('Content-Type', mailer.guess_type(f['name']))
+        self.send_header('Content-Disposition', "inline; filename*=UTF-8''" + urllib.parse.quote(f['name']))
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(data)
+
     def _host_ok(self):
         host = (self.headers.get('Host') or '').rsplit(':', 1)[0]
         return host in ('127.0.0.1', 'localhost')
@@ -758,13 +814,18 @@ class Handler(BaseHTTPRequestHandler):
             if fname == 'index.html':
                 data = data.replace(b'__TOKEN__', TOKEN.encode())
             return self._send(200, data, ctype)
+        query = {k: v[0] for k, v in urllib.parse.parse_qs(url.query).items()}
+        if method == 'GET' and url.path == '/api/file':
+            # 图片、链接没法带请求头，所以这个地址的口令放在网址里
+            if query.get('t') != TOKEN:
+                return self._send(403, {'error': '页面过期了，请刷新一下。'})
+            return self._send_file(query.get('id'))
         fn = ROUTES.get((method, url.path))
         if fn is None:
             return self._send(404, {'error': '没有这个地址'})
         # 只认本页面发来的请求，别的网页没法冒用
         if self.headers.get('X-Token') != TOKEN:
             return self._send(403, {'error': '页面过期了，请刷新一下。'})
-        query = {k: v[0] for k, v in urllib.parse.parse_qs(url.query).items()}
         length = int(self.headers.get('Content-Length') or 0)
         raw = self.rfile.read(length) if length else b''
         try:

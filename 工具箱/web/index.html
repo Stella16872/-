@@ -123,7 +123,8 @@
             <input class="tf" id="tRule" data-key="rule" type="text" spellcheck="false" placeholder="{姓名}"></label>
           <div class="help small">
             文件叫 <code>张三.pdf</code> 这种：填 <code>{姓名}</code><br>
-            文件叫 <code>张三_9月工资条.pdf</code> 这种：填 <code>{姓名}*</code>（星号代表「后面随便什么」）<br>
+            文件叫 <code>张三_9月工资条.pdf</code>、<code>张三_照片2.jpg</code> 这种：填 <code>{姓名}_*</code>（星号代表「后面随便什么」，一个人可以有好几个文件）<br>
+            每人一个小文件夹（<code>张三/</code> 里放他的文件）：填 <code>{姓名}/*</code><br>
             表格里有一列直接写了文件名：填那一列，比如 <code>{附件}</code>；一个人多个文件用分号隔开
           </div>
         </div>
@@ -137,6 +138,7 @@
     <div id="checkEmpty" class="muted">选好名单、写好邮件以后，这里会一封封列出来，发之前可以逐封检查。</div>
     <div id="checkView" hidden>
       <div class="filters" id="filters"></div>
+      <div class="hint warn" id="unusedHint" hidden></div>
       <div class="split">
         <div class="list-pane">
           <div class="list-tools">

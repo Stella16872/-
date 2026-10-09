@@ -192,6 +192,11 @@ table.data th.used { color: var(--gold); }
 .chip .x { border: 0; background: none; color: var(--sub); padding: 0 6px; font-size: 15px; line-height: 1; }
 .chip .x:hover { color: var(--bad); }
 .chip .size { color: var(--faint); }
+a.chip, .chip a.open { color: inherit; text-decoration: none; }
+a.chip.open:hover, .chip a.open:hover { color: var(--gold); }
+.thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.thumbs img { display: block; height: 72px; max-width: 140px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--gold-soft); }
+.filters + .hint { margin-bottom: 12px; }
 .folder-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* 检查 */

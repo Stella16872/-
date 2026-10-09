@@ -75,6 +75,21 @@ class Unit(unittest.TestCase):
         self.assertEqual(names('{附件}', {'附件': 'a[1].txt; 张三.pdf'}), (['a[1].txt', '张三.pdf'], []))
         self.assertEqual(names('{姓名}', {'姓名': '王五'})[1], ['附件文件夹里找不到「王五」'])
 
+    def test_attachment_subfolders(self):
+        files = [{'id': str(i), 'name': n.split('/')[-1], 'rel': n} for i, n in
+                 enumerate(['张三/工资条.pdf', '张三/照片.jpg', '李四/工资条.pdf'])]
+        got, err, _ = mailer.match_attachments('{姓名}/*', {'姓名': '张三'}, ['姓名'], files)
+        self.assertEqual([f['rel'] for f in got], ['张三/工资条.pdf', '张三/照片.jpg'])
+        self.assertEqual(err, [])
+
+    def test_file_types(self):
+        self.assertEqual(mailer.guess_type('合同.DOCX'),
+                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        self.assertEqual(mailer.guess_type('IMG_0001.HEIC'), 'image/heic')
+        self.assertEqual(mailer.guess_type('照片.jpeg'), 'image/jpeg')
+        self.assertEqual(mailer.guess_type('奇怪的文件.xyz123'), 'application/octet-stream')
+        self.assertEqual(mailer.guess_type('a.tar.gz'), 'application/octet-stream')
+
     def test_csv(self):
         data = '姓名,邮箱\n张三,a@b.com\n\n李四,c@d.com\n'.encode('gbk')
         t = sheets.read_table('x.csv', data)
@@ -125,7 +140,14 @@ class EndToEnd(unittest.TestCase):
         cls.smtp_port = free_port()
         cls.smtp = fake_smtp.serve(cls.smtp_port, cls.inbox)
         threading.Thread(target=cls.smtp.serve_forever, daemon=True).start()
-        env = dict(os.environ, TOOLBOX_DATA=os.path.join(cls.tmp, 'data'))
+        # 假的 sips（Mac 自带的图片转换工具）：直接复制，用来测 HEIC 转 JPG 的流程
+        bindir = os.path.join(cls.tmp, 'bin')
+        os.makedirs(bindir)
+        with open(os.path.join(bindir, 'sips'), 'w') as f:
+            f.write('#!/bin/sh\n# sips -s format jpeg IN --out OUT\ncp "$4" "$6"\n')
+        os.chmod(os.path.join(bindir, 'sips'), 0o755)
+        env = dict(os.environ, TOOLBOX_DATA=os.path.join(cls.tmp, 'data'),
+                   PATH=bindir + os.pathsep + os.environ.get('PATH', ''))
         cls.proc = subprocess.Popen([sys.executable, os.path.join(ROOT, 'app.py'), '--no-browser',
                                      '--port', str(free_port())], env=env,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -147,6 +169,12 @@ class EndToEnd(unittest.TestCase):
         cls.smtp.server_close()
         shutil.rmtree(cls.tmp)
 
+    def setUp(self):
+        # 每个测试从干净的状态开始
+        self.call('/api/job', {'action': 'clear'})
+        self.call('/api/remove_files', {'group': 'folder'})
+        self.call('/api/remove_files', {'group': 'common'})
+
     def call(self, path, body=None, raw=None, query='', expect=200):
         url = self.base.rstrip('/') + path + (('?' + query) if query else '')
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
@@ -158,6 +186,11 @@ class EndToEnd(unittest.TestCase):
             code, out = e.code, json.load(e)
         self.assertEqual(code, expect, out)
         return out
+
+    def login(self):
+        self.call('/api/test_login', {'user': 'me@example.com', 'preset': 'custom', 'host': '127.0.0.1',
+                                      'port': self.smtp_port, 'security': 'none', 'name': '', 'remember': False,
+                                      'password': 'good-password'})
 
     def wait_job(self):
         for _ in range(200):
@@ -175,9 +208,9 @@ class EndToEnd(unittest.TestCase):
 
         acct = {'user': 'me@example.com', 'preset': 'custom', 'host': '127.0.0.1', 'port': self.smtp_port,
                 'security': 'none', 'name': '星光科技', 'remember': True}
-        err = self.call('/api/test_login', dict(acct, password='wrong'), expect=400)
+        err = self.call('/api/test_login', dict(acct, user='other@example.com', password='wrong'), expect=400)
         self.assertIn('登录失败', err['error'])
-        self.assertFalse(self.call('/api/init')['settings']['has_password'])
+        self.assertFalse(self.call('/api/init')['settings']['has_password'])  # 密码不对就不会被记住
         self.call('/api/test_login', dict(acct, password='good-password'))
         self.assertTrue(self.call('/api/init')['settings']['has_password'])
 
@@ -231,8 +264,49 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(len(job['items']), 1)
         self.wait_job()
 
-    def test_rate_limit_pauses(self):
+    def get_raw(self, path):
+        with urllib.request.urlopen(self.base.rstrip('/') + path) as r:
+            return r.status, r.headers.get('Content-Type'), r.read()
+
+    def test_attachments_photos_and_documents(self):
+        self.login()
+        csv_data = '姓名,邮箱\n张三,a@example.com\n张三丰,b@example.com\n李四,c@example.com\n'.encode()
+        self.call('/api/upload_table', raw=csv_data, query='name=l.csv')
+        up = lambda name, group='folder': self.call('/api/upload_file', raw=b'data-' + name.encode(), query=(
+            'group=%s&name=%s&rel=f/%s' % (group, urllib.parse.quote(name), urllib.parse.quote(name))))
+        photo = up('IMG_0001.HEIC', 'common')
+        self.assertEqual(photo['name'], 'IMG_0001.jpg')
+        self.assertEqual(photo['converted_from'], 'IMG_0001.HEIC')
+        self.assertTrue(photo['image'])
+        for n in ('张三_合同.docx', '张三丰_合同.docx', '张叁_合同.docx'):
+            up(n)
+        tpl = {'to': '{邮箱}', 'subject': '合同', 'body': 'hi', 'rule': '{姓名}*'}
+        p = self.call('/api/preview', {'template': tpl})
+        zhang = p['items'][0]
+        self.assertEqual([a['name'] for a in zhang['attachments']], ['IMG_0001.jpg', '张三_合同.docx', '张三丰_合同.docx'])
+        self.assertTrue(any('也会发给第 3 行' in w for w in zhang['warnings']), zhang['warnings'])
+        self.assertEqual(p['unused'], ['张叁_合同.docx'])
+        self.assertIn('附件文件夹里找不到「李四*」', p['items'][2]['errors'])
+        # 规则写成 {姓名}_* 就不会把张三丰的合同发给张三
+        p = self.call('/api/preview', {'template': dict(tpl, rule='{姓名}_*')})
+        self.assertEqual([a['name'] for a in p['items'][0]['attachments']], ['IMG_0001.jpg', '张三_合同.docx'])
+        self.assertFalse(any('也会发给' in w for w in p['items'][0]['warnings']))
+        # 预览里能打开附件；没有口令打不开
+        status, ctype, data = self.get_raw('/api/file?id=%s&t=%s' % (photo['id'], self.token))
+        self.assertEqual((status, ctype, data), (200, 'image/jpeg', b'data-IMG_0001.HEIC'))
+        with self.assertRaises(urllib.error.HTTPError):
+            self.get_raw('/api/file?id=%s&t=wrong' % photo['id'])
+        # 发出去的邮件里，附件类型和名字都对
+        self.call('/api/send', {'template': dict(tpl, rule='{姓名}_*'), 'indexes': [0], 'interval': 0})
+        self.wait_job()
+        msg = email.message_from_bytes(open(sorted(glob.glob(self.inbox + '/*.eml'))[-1], 'rb').read())
+        parts = [(pt.get_content_type(), decode(pt.get_param('filename', header='Content-Disposition')))
+                 for pt in msg.walk() if pt.get_param('filename', header='Content-Disposition')]
+        self.assertEqual(parts, [('image/jpeg', 'IMG_0001.jpg'), (
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '张三_合同.docx')])
         self.call('/api/job', {'action': 'clear'})
+
+    def test_rate_limit_pauses(self):
         port = free_port()
         acct = {'user': 'me@example.com', 'preset': 'custom', 'host': '127.0.0.1', 'port': port,
                 'security': 'none', 'name': '', 'remember': False}
@@ -242,8 +316,6 @@ class EndToEnd(unittest.TestCase):
             self.call('/api/test_login', dict(acct, password='good-password'))
             csv_data = '姓名,邮箱\n甲,a@example.com\n乙,b@example.com\n丙,c@example.com\n'.encode()
             self.call('/api/upload_table', raw=csv_data, query='name=l.csv')
-            self.call('/api/remove_files', {'group': 'folder'})
-            self.call('/api/remove_files', {'group': 'common'})
             tpl = {'to': '{邮箱}', 'subject': '限流测试 {姓名}', 'body': 'hi', 'rule': ''}
             self.call('/api/send', {'template': tpl, 'indexes': [0, 1, 2], 'interval': 0})
             job = self.wait_job()
