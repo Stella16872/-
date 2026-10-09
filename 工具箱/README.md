@@ -27,8 +27,8 @@
 打开 <https://github.com/Stella16872/-/archive/refs/heads/main.zip> 下载压缩包，双击解压，
 把里面的 **「工具箱」文件夹** 拖到一个顺手的地方（比如「文稿」）。其余的文件用不到。
 
-> 如果这个链接下载下来没有「工具箱」文件夹，说明还没合并到 main，先用这个：
-> <https://github.com/Stella16872/-/archive/refs/heads/claude/bulk-email-tool-75syco.zip>
+以后有新版本，同样从这个链接下载，用新的「工具箱」文件夹换掉旧的就行。
+模板、发送记录、设置都存在 `~/工具箱数据` 里，换版本不会丢。
 
 ### 2. 确认有 Python 3
 
