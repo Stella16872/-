@@ -12,6 +12,9 @@
   <div class="brand">工具箱</div>
   <nav class="tabs" role="tablist">
     <button class="tab on" data-tab="mail" role="tab" aria-selected="true">群发邮件</button>
+    <button class="tab" data-tab="merge" role="tab">合并表格</button>
+    <button class="tab" data-tab="split" role="tab">拆分表格</button>
+    <button class="tab" data-tab="compare" role="tab">核对表格</button>
   </nav>
   <button class="ghost small" id="quitBtn" title="关掉工具箱">退出</button>
 </header>
@@ -66,6 +69,7 @@
       <div class="table-bar">
         <span class="file-chip" id="tableName"></span>
         <label class="inline" id="sheetWrap" hidden>工作表 <select id="sheetSel"></select></label>
+        <label class="inline" id="headWrap" hidden>表头在 <select id="headSel"></select></label>
         <span class="muted" id="tableCount"></span>
         <span class="grow"></span>
         <button class="ghost small" id="tableChange">换一个文件</button>
@@ -192,12 +196,144 @@
     </div>
   </section>
 
-  <footer class="foot">
+</main>
+
+
+<!-- ================================================================ 合并表格 -->
+<main class="page" id="tab-merge" hidden>
+  <p class="intro">把几张表上下拼成一张，比如各部门交上来的表。列的顺序不一样没关系，按列名对齐；
+    表格顶上的大标题、底下的「合计」行会自动处理。</p>
+
+  <section class="card">
+    <div class="card-head"><span class="num">1</span><h2>选要合并的表格</h2></div>
+    <label class="drop" id="mDrop">
+      <input type="file" id="mInput" accept=".xlsx,.xlsm,.csv,.tsv,.txt,.xls,.numbers" multiple hidden>
+      <div class="drop-main">把几个 Excel / CSV 文件一起拖到这里，或者<u>点这里选择</u>（可以多选）</div>
+      <div class="drop-sub">一个文件里有好几张工作表（比如 1 月到 12 月）也可以，选「全部工作表」就行。</div>
+    </label>
+    <div class="src-list" id="mList"></div>
+  </section>
+
+  <section class="card" id="mColsCard" hidden>
+    <div class="card-head"><span class="num">2</span><h2>对齐列</h2><div class="head-side" id="mColsSide"></div></div>
+    <div class="hint warn" id="mColsHint" hidden></div>
+    <div class="table-wrap"><table class="data matrix" id="mMatrix"></table></div>
+    <div class="opts">
+      <label class="check"><input type="checkbox" id="mSource" checked> <span>加一列「来源」，写上每行来自哪个文件</span></label>
+      <label class="check"><input type="checkbox" id="mTotals" checked> <span id="mTotalsLabel">去掉「合计 / 小计」行</span></label>
+      <label class="check"><input type="checkbox" id="mDedupe"> <span id="mDedupeLabel">去掉完全重复的行</span></label>
+    </div>
+  </section>
+
+  <section class="card" id="mResultCard" hidden>
+    <div class="card-head"><span class="num">3</span><h2>合并结果</h2><div class="head-side muted" id="mCount"></div></div>
+    <div class="table-wrap tall"><table class="data" id="mPreview"></table></div>
+    <div class="muted small" id="mMore"></div>
+    <div class="actions">
+      <button class="primary" id="mExport">下载合并结果</button>
+      <button class="ghost" id="mToSplit">接着拆分这张表</button>
+      <button class="ghost" id="mToCompare">接着拿去核对</button>
+      <span class="status-line" id="mMsg"></span>
+    </div>
+  </section>
+</main>
+
+<!-- ================================================================ 拆分表格 -->
+<main class="page" id="tab-split" hidden>
+  <p class="intro">把一张大表按某一列拆开，比如按「部门」拆成每个部门一份、按「姓名」拆成每人一份工资条。
+    拆好的文件可以直接拿去群发，每人收到自己那一份。</p>
+
+  <section class="card">
+    <div class="card-head"><span class="num">1</span><h2>选要拆的表格</h2></div>
+    <div id="sPicker"></div>
+  </section>
+
+  <section class="card" id="sGroupCard" hidden>
+    <div class="card-head"><span class="num">2</span><h2>按哪一列拆</h2>
+      <div class="head-side"><select id="sCol"></select></div></div>
+    <label class="check"><input type="checkbox" id="sTotals" checked> <span id="sTotalsLabel">去掉「合计 / 小计」行</span></label>
+    <div class="hint warn" id="sBlankHint" hidden></div>
+    <div class="groups" id="sGroups"></div>
+  </section>
+
+  <section class="card" id="sOutCard" hidden>
+    <div class="card-head"><span class="num">3</span><h2>怎么输出</h2></div>
+    <div class="radios">
+      <label class="check"><input type="radio" name="sMode" value="files" checked>
+        <span><b>每份一个文件</b>，放进一个文件夹 <em>（要分别发给不同的人时选这个）</em></span></label>
+      <label class="check"><input type="radio" name="sMode" value="sheets">
+        <span><b>一个文件</b>，每份一张工作表</span></label>
+    </div>
+    <label class="field" id="sNameWrap"><span>文件名</span>
+      <input type="text" id="sName" value="{值}" spellcheck="false"></label>
+    <div class="help small" id="sNameHelp"></div>
+    <div class="actions">
+      <button class="primary" id="sExport">开始拆分</button>
+      <span class="status-line" id="sMsg"></span>
+    </div>
+    <div class="result" id="sResult" hidden>
+      <div class="banner ok" id="sDone"></div>
+      <div class="actions">
+        <button class="ghost" id="sOpen">在访达中打开</button>
+        <button class="primary" id="sToMail">用这些文件群发邮件 →</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================================================================ 核对表格 -->
+<main class="page" id="tab-compare" hidden>
+  <p class="intro">两张表对一对：谁在 A 里、不在 B 里（比如还没交的人），谁多出来了，两边都有的人内容对不对得上。
+    找出来的人可以直接群发催办邮件。</p>
+
+  <div class="two">
+    <section class="card">
+      <div class="card-head"><span class="num">A</span><h2>表 A</h2></div>
+      <p class="muted small sub">比如：应该交的人（全员名单）</p>
+      <div id="cPickerA"></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><span class="num">B</span><h2>表 B</h2></div>
+      <p class="muted small sub">比如：已经交了的人</p>
+      <div id="cPickerB"></div>
+    </section>
+  </div>
+
+  <section class="card" id="cKeyCard" hidden>
+    <div class="card-head"><span class="num">2</span><h2>用哪一列来对应</h2></div>
+    <div class="keys">
+      <label class="inline">表 A 的 <select id="cKeyA"></select></label>
+      <span class="eq">对应</span>
+      <label class="inline">表 B 的 <select id="cKeyB"></select></label>
+    </div>
+    <p class="muted small">一般选姓名、工号、邮箱这种每个人都不一样的列。</p>
+    <label class="check"><input type="checkbox" id="cLoose" checked>
+      <span>忽略空格、全角半角和大小写（「 张三 」和「张三」算同一个）</span></label>
+    <div class="cmp-cols" id="cColsWrap" hidden>
+      <div class="attach-title">两边都有的人，还要比较这些列的内容：</div>
+      <div class="chips" id="cCols"></div>
+    </div>
+  </section>
+
+  <section class="card" id="cResultCard" hidden>
+    <div class="card-head"><span class="num">3</span><h2>核对结果</h2></div>
+    <div class="stats" id="cStats"></div>
+    <div class="hint warn" id="cWarn" hidden></div>
+    <div class="table-wrap tall"><table class="data" id="cTable"></table></div>
+    <div class="muted small" id="cMore"></div>
+    <div class="actions">
+      <button class="primary" id="cExport">下载核对结果</button>
+      <button class="ghost" id="cToMail" hidden></button>
+      <span class="status-line" id="cMsg"></span>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
     所有东西都只在这台电脑上处理，邮件从你自己的邮箱直接发出去。
     发送记录和模板存在 <code id="dataDir"></code>
     <button class="link" id="openData">打开</button>
   </footer>
-</main>
 
 <div class="closed" id="closed" hidden>
   <div><h2>工具箱已关闭</h2><p>可以关掉这个网页和终端窗口了。下次用的时候，再双击「双击打开.command」。</p></div>
@@ -215,6 +351,8 @@
   </form>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="common.js"></script>
 <script src="app.js"></script>
+<script src="tools.js"></script>
 </body>
 </html>

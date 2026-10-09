@@ -174,6 +174,7 @@ class EndToEnd(unittest.TestCase):
         self.call('/api/job', {'action': 'clear'})
         self.call('/api/remove_files', {'group': 'folder'})
         self.call('/api/remove_files', {'group': 'common'})
+        self.call('/api/clear_table', {})
 
     def call(self, path, body=None, raw=None, query='', expect=200):
         url = self.base.rstrip('/') + path + (('?' + query) if query else '')
@@ -219,7 +220,7 @@ class EndToEnd(unittest.TestCase):
         t = self.call('/api/upload_table', raw=csv_data, query='name=list.csv')
         self.assertEqual(len(t['rows']), 5)
 
-        f = self.call('/api/upload_file', raw=b'common-file', query='group=common&name=%E8%AF%B4%E6%98%8E.txt')
+        self.call('/api/upload_file', raw=b'common-file', query='group=common&name=%E8%AF%B4%E6%98%8E.txt')
         for n in ('张三.txt', '赵六.txt', '李四.txt'):
             self.call('/api/upload_file', raw=n.encode(), query='group=folder&name=%s&rel=folder/%s' % (
                 urllib.parse.quote(n), urllib.parse.quote(n)))
@@ -305,6 +306,77 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(parts, [('image/jpeg', 'IMG_0001.jpg'), (
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '张三_合同.docx')])
         self.call('/api/job', {'action': 'clear'})
+
+    def source(self, name):
+        with open(os.path.join(ROOT, '示例表格', name), 'rb') as f:
+            return self.call('/api/source_upload', raw=f.read(), query='name=' + urllib.parse.quote(name))
+
+    def download(self, d):
+        status, ctype, data = self.get_raw('/api/download?id=%s&t=%s' % (d['id'], self.token))
+        self.assertEqual(status, 200)
+        return sheets.read_table(d['filename'], data)
+
+    def test_tools_merge_split_send(self):
+        # 合并：两个部门的工资表，标题行、合计行、列顺序不同、「名字」≠「姓名」
+        a, b = self.source('销售部.xlsx'), self.source('技术部.xlsx')
+        self.assertEqual((a['header_row'], a['total']), (2, 5))
+        req = {'sources': [{'sid': a['sid']}, {'sid': b['sid']}], 'add_source': True, 'drop_totals': True}
+        m = self.call('/api/merge', req)
+        self.assertIn('名字', m['columns'])  # 没改名之前是两列
+        m = self.call('/api/merge', dict(req, rename={'名字': '姓名'}, export=True))
+        self.assertNotIn('名字', m['columns'])
+        self.assertEqual((m['total'], m['removed_totals']), (7, 2))
+        self.assertEqual([x['in'] for x in m['matrix'] if x['column'] == '备注'], [[False, True]])
+        merged = self.download(m['download'])
+        self.assertEqual(len(merged['rows']), 7)
+        self.assertEqual(merged['rows'][4]['姓名'], '赵六')
+        self.assertEqual(merged['rows'][0]['工资'], '8,500.00')
+        self.assertEqual(sheets.cell_value(merged['rows'][0], merged['columns'], '工资'), (8500.0, '#,##0.00'))
+
+        # 拆分：合并结果按姓名拆成每人一个文件
+        src = {'sid': m['source']['sid']}
+        p = self.call('/api/split', dict(src, column='姓名', name_tpl='{值}_9月工资条'))
+        self.assertEqual(len(p['groups']), 7)
+        self.assertEqual(p['groups'][0]['filename'], '张三_9月工资条.xlsx')
+        out = self.call('/api/split', dict(src, column='姓名', name_tpl='{值}_9月工资条', export=True))
+        self.assertEqual(len(os.listdir(out['folder'])), 7)
+        one = sheets.read_table('x.xlsx', open(os.path.join(out['folder'], '李四_9月工资条.xlsx'), 'rb').read())
+        self.assertEqual([r['工资'] for r in one['rows']], ['9,200.50'])
+        sheets_mode = self.call('/api/split', dict(src, column='来源', mode='sheets', export=True))
+        self.assertEqual(len(self.download(sheets_mode['download'])['sheets']), 2)
+
+        # 拆好的工资条直接交给群发：名单用合并结果，附件按姓名对上
+        r = self.call('/api/split_to_mail', {})
+        self.assertEqual((r['rule'], r['count'], r['table_set']), ('{姓名}_9月工资条', 7, True))
+        tpl = {'to': '{邮箱}', 'subject': '{姓名} 9 月工资条', 'body': '见附件', 'rule': r['rule']}
+        items = self.call('/api/preview', {'template': tpl})['items']
+        self.assertEqual([i['attachments'][0]['name'] for i in items][:2], ['张三_9月工资条.xlsx', '李四_9月工资条.xlsx'])
+        self.assertFalse(any(i['errors'] for i in items))
+        self.assertFalse(any('也会发给' in w for i in items for w in i['warnings']))  # 张三 和 张三丰 没混
+
+    def test_tools_compare_then_remind(self):
+        a, b = self.source('全员名单.xlsx'), self.source('已交材料.xlsx')
+        req = {'a': {'sid': a['sid']}, 'b': {'sid': b['sid']}, 'key_a': '姓名', 'key_b': '名字', 'loose': True}
+        r = self.call('/api/compare', dict(req, export=True))
+        self.assertEqual([row[1] for row in r['only_a']], ['王五', '张三丰', '钱七', '孙八'])
+        self.assertEqual([row[1] for row in r['only_b']], ['周九'])
+        self.assertEqual([(d['key'], d['changes'][0]['column']) for d in r['diffs']], [('李四', '部门')])
+        self.assertEqual(r['dup_b'], [{'key': '张三', 'rows': [2, 6]}])
+        self.assertEqual(r['same'], 2)
+        status, _, data = self.get_raw('/api/download?id=%s&t=%s' % (r['download']['id'], self.token))
+        self.assertEqual(sheets.read_table('r.xlsx', data)['sheets'], ['汇总', '只在A里', '只在B里', '内容不同'])
+        # 只比「部门」以外的列 → 没有不一样的
+        r2 = self.call('/api/compare', dict(req, columns=[]))
+        self.assertEqual(r2['n_diffs'], 0)
+        # 没交的人直接做成群发名单
+        m = self.call('/api/compare_to_mail', dict(req, which='a'))
+        self.assertEqual(m['count'], 4)
+        init = self.call('/api/init')
+        self.assertTrue(init['table']['filename'].startswith('核对结果'))
+        items = self.call('/api/preview', {'template': {'to': '{邮箱}', 'subject': '催一下', 'body': '{姓名}，记得交材料'}})['items']
+        self.assertEqual([i['to'] for i in items], [['wangwu@example.com'], ['zhangsanfeng@example.com'],
+                                                   ['qianqi@example.com'], ['sunba@example.com']])
+        self.call('/api/select_sheet', {'sheet': 'x'}, expect=400)  # 核对结果不能换工作表
 
     def test_rate_limit_pauses(self):
         port = free_port()

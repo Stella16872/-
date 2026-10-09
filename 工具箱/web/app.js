@@ -1,7 +1,7 @@
 'use strict';
 (function () {
-  var TOKEN = document.querySelector('meta[name=token]').content;
-  var $ = function (id) { return document.getElementById(id); };
+  var TOKEN = window.TB.TOKEN;
+  var $ = window.TB.$;
 
   // 当前页面的状态
   var S = {
@@ -10,69 +10,8 @@
     editingAcct: false, ruleAuto: false
   };
 
-  // ------------------------------------------------------------ 小工具
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-  function size(n) {
-    if (n < 1024) return n + ' B';
-    if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
-    return (n / 1048576).toFixed(1) + ' MB';
-  }
-  function api(path, body) {
-    var opt = { method: body === undefined ? 'GET' : 'POST', headers: { 'X-Token': TOKEN } };
-    if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-    return fetch(path, opt).then(handle, offline);
-  }
-  function upload(path, params, blob) {
-    var q = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
-    return fetch(path + '?' + q, { method: 'POST', headers: { 'X-Token': TOKEN }, body: blob }).then(handle, function () {
-      throw new Error('读不了文件「' + params.name + '」。如果它在 iCloud 云盘里，先在访达里右键选「立即下载」，再选一次。' +
-        '（也可能是工具箱的终端窗口被关掉了。）');
-    });
-  }
-  function handle(r) {
-    return r.json().catch(function () { return {}; }).then(function (d) {
-      if (!r.ok) throw new Error(d.error || ('出错了（' + r.status + '）'));
-      return d;
-    });
-  }
-  function offline() {
-    throw new Error('连不上工具箱了。终端窗口是不是被关掉了？重新双击「双击打开.command」就好。');
-  }
-  var toastTimer;
-  function toast(msg, bad) {
-    var t = $('toast');
-    t.textContent = msg; t.className = 'toast show' + (bad ? ' bad' : '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.className = 'toast' + (bad ? ' bad' : ''); }, bad ? 5000 : 2600);
-  }
-  function fail(e) { toast(e.message || String(e), true); }
-  function debounce(fn, ms) {
-    var t; return function () { clearTimeout(t); t = setTimeout(fn, ms); };
-  }
-  function dialog(title, html, opts) {
-    opts = opts || {};
-    return new Promise(function (resolve) {
-      var d = $('dlg');
-      $('dlgTitle').textContent = title;
-      $('dlgBody').innerHTML = html;
-      $('dlgInput').hidden = !opts.input;
-      $('dlgInput').value = opts.value || '';
-      $('dlgOk').textContent = opts.ok || '确定';
-      $('dlgCancel').hidden = !!opts.alert;
-      d.returnValue = '';
-      $('dlgCancel').onclick = function () { d.close('cancel'); };
-      d.onclose = function () {
-        resolve(d.returnValue === 'ok' ? (opts.input ? $('dlgInput').value.trim() : true) : null);
-      };
-      d.showModal();
-      if (opts.input) { $('dlgInput').focus(); $('dlgInput').select(); }
-    });
-  }
-  function msg(el, text, kind) { el.textContent = text || ''; el.className = 'status-line' + (kind ? ' ' + kind : ''); }
+  var TB = window.TB, api = TB.api, upload = TB.upload, esc = TB.esc, size = TB.size, toast = TB.toast,
+    fail = TB.fail, debounce = TB.debounce, dialog = TB.dialog, msg = TB.msg;
 
   // ------------------------------------------------------------ 1 发件邮箱
   function fillPresets() {
@@ -187,10 +126,12 @@
     $('tableSide').innerHTML = '';
     $('tableName').textContent = t.filename;
     $('tableCount').textContent = '共 ' + t.rows.length + ' 行';
-    $('sheetWrap').hidden = t.sheets.length < 2;
+    $('sheetWrap').hidden = t.fixed || t.sheets.length < 2;
     $('sheetSel').innerHTML = t.sheets.map(function (n) {
       return '<option' + (n === t.sheet ? ' selected' : '') + '>' + esc(n) + '</option>';
     }).join('');
+    TB.headerOptions($('headSel'), t);
+    $('headWrap').hidden = t.fixed || (t.candidates || []).length < 2;
     renderTable();
     // 收件人没填、或者填的列这张表里没有：自动用邮箱那一列
     var to = $('tTo').value.trim();
@@ -232,6 +173,10 @@
     $('tableChange').onclick = function () { $('tableInput').click(); };
     $('sheetSel').onchange = function () {
       api('/api/select_sheet', { sheet: this.value }).then(function (t) { S.excluded = {}; S.cur = 0; setTable(t, true); }).catch(fail);
+    };
+    $('headSel').onchange = function () {
+      api('/api/select_sheet', { sheet: S.table.sheet, header_row: +this.value })
+        .then(function (t) { S.excluded = {}; S.cur = 0; setTable(t, true); }).catch(fail);
     };
   }
 
@@ -709,5 +654,19 @@
     }).catch(fail);
   }
   function sysNotMac(p) { return p && p !== 'darwin'; }
+
+  // 表格工具把结果交过来以后（名单、每人的附件），刷新这一页
+  window.Mail = {
+    hasTable: function () { return !!S.table; },
+    reload: function (opts) {
+      opts = opts || {};
+      return api('/api/init').then(function (d) {
+        S.files = d.files; renderFiles();
+        if (opts.rule) { $('tRule').value = opts.rule; S.ruleAuto = false; saveDraft(); }
+        S.excluded = {}; S.cur = 0; S.filter = 'all';
+        setTable(d.table, true);
+      });
+    }
+  };
   init();
 })();

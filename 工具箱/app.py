@@ -27,12 +27,14 @@ sys.path.insert(0, HERE)
 
 import mailer  # noqa: E402
 import sheets  # noqa: E402
+import tools_api  # noqa: E402
 
 APP_ID = 'toolbox-mail-v1'
 PORTS = range(8765, 8776)
 DATA_DIR = os.environ.get('TOOLBOX_DATA') or os.path.join(os.path.expanduser('~'), '工具箱数据')
 RECORD_DIR = os.path.join(DATA_DIR, '发送记录')
 TEMPLATE_DIR = os.path.join(DATA_DIR, '模板')
+SPLIT_DIR = os.path.join(DATA_DIR, '拆分结果')
 HISTORY_FILE = os.path.join(RECORD_DIR, '已发送.jsonl')
 KEYCHAIN_SERVICE = 'toolbox-mail'
 HISTORY_DAYS = 30
@@ -475,14 +477,38 @@ TOKEN = secrets.token_urlsafe(24)
 WEB = os.path.join(HERE, 'web')
 STATIC = {'/': ('index.html', 'text/html; charset=utf-8'),
           '/style.css': ('style.css', 'text/css; charset=utf-8'),
-          '/app.js': ('app.js', 'application/javascript; charset=utf-8')}
+          '/common.js': ('common.js', 'application/javascript; charset=utf-8'),
+          '/app.js': ('app.js', 'application/javascript; charset=utf-8'),
+          '/tools.js': ('tools.js', 'application/javascript; charset=utf-8')}
 
 
 def _table_summary(t):
     if not t:
         return None
     return {'filename': t['filename'], 'sheets': t['sheets'], 'sheet': t['sheet'],
-            'columns': t['columns'], 'rows': t['rows']}
+            'header_row': t.get('header_row'), 'candidates': t.get('candidates') or [],
+            'fixed': t.get('data') is None, 'columns': t['columns'],
+            'rows': [{k: v for k, v in r.items() if k != '_cells'} for r in t['rows']]}
+
+
+_EMAIL_COL = re.compile(r'邮箱|邮件|e-?mail|mail', re.I)
+
+
+def set_mail_table(t, only_if_empty=False):
+    """表格工具把结果交给「群发邮件」当名单。only_if_empty：群发那边已经有名单就不动。"""
+    with STATE.lock:
+        if only_if_empty:
+            if STATE.table:
+                return False
+            has_email = any(_EMAIL_COL.search(c) for c in t['columns']) or any(
+                '@' in r.get(c, '') for r in t['rows'][:20] for c in t['columns'])
+            if not has_email:
+                return False
+        STATE.table = t
+    return True
+
+
+TOOLS = tools_api.Tools(STATE, SPLIT_DIR, set_mail_table)
 
 
 def _file_public(f):
@@ -559,7 +585,9 @@ def api_select_sheet(_q, b):
         t = STATE.table
     if not t:
         raise sheets.SheetError('还没有选名单文件。')
-    nt = sheets.read_table(t['filename'], t['data'], b.get('sheet'))
+    if t.get('data') is None:
+        raise sheets.SheetError('这份名单是表格工具生成的，不能换工作表。要换的话，重新选一个文件。')
+    nt = sheets.read_table(t['filename'], t['data'], b.get('sheet'), b.get('header_row'))
     nt['filename'], nt['data'] = t['filename'], t['data']
     with STATE.lock:
         STATE.table = nt
@@ -719,7 +747,9 @@ def api_template_delete(_q, b):
 
 def api_open_folder(_q, b):
     _ensure_dirs()
-    path = b.get('path') if b.get('path', '').startswith(DATA_DIR) else RECORD_DIR
+    path = os.path.realpath(b.get('path') or RECORD_DIR)
+    if not path.startswith(os.path.realpath(DATA_DIR) + os.sep):
+        path = RECORD_DIR  # 只打开工具箱自己的数据文件夹
     if os.path.isfile(path):
         cmd = ['open', '-R', path] if sys.platform == 'darwin' else ['xdg-open', os.path.dirname(path)]
     else:
@@ -757,7 +787,8 @@ ROUTES = {
     ('POST', '/api/open_folder'): api_open_folder,
     ('POST', '/api/quit'): api_quit,
 }
-RAW_BODY = {'/api/upload_table', '/api/upload_file'}
+ROUTES.update(TOOLS.routes())
+RAW_BODY = {'/api/upload_table', '/api/upload_file', '/api/source_upload'}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -786,6 +817,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', mailer.guess_type(f['name']))
         self.send_header('Content-Disposition', "inline; filename*=UTF-8''" + urllib.parse.quote(f['name']))
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _send_download(self, oid):
+        out = TOOLS.get_output(oid)
+        if not out:
+            return self._send(404, {'error': '这个文件已经过期了，请重新生成一次。'})
+        name, data = out
+        self.send_response(200)
+        self.send_header('Content-Type', mailer.guess_type(name))
+        self.send_header('Content-Disposition', "attachment; filename*=UTF-8''" + urllib.parse.quote(name))
         self.send_header('Content-Length', str(len(data)))
         self.send_header('Cache-Control', 'no-store')
         self.end_headers()
@@ -820,6 +864,10 @@ class Handler(BaseHTTPRequestHandler):
             if query.get('t') != TOKEN:
                 return self._send(403, {'error': '页面过期了，请刷新一下。'})
             return self._send_file(query.get('id'))
+        if method == 'GET' and url.path == '/api/download':
+            if query.get('t') != TOKEN:
+                return self._send(403, {'error': '页面过期了，请刷新一下。'})
+            return self._send_download(query.get('id'))
         fn = ROUTES.get((method, url.path))
         if fn is None:
             return self._send(404, {'error': '没有这个地址'})

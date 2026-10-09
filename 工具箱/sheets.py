@@ -19,11 +19,18 @@ class SheetError(Exception):
 
 # ---------------------------------------------------------------- 入口
 
-def read_table(filename, data, sheet=None):
-    """读一个名单文件。
+# 每个格子在内部是一个三元组：(看到的文字, 原始值, 数字格式)。
+# 原始值：文字格子是 str，数字和日期是 float，TRUE/FALSE 是 bool，空格子是 None。
+EMPTY = ('', None, None)
 
-    返回 {'sheets': [...], 'sheet': 当前表名, 'columns': [...], 'rows': [...]}，
-    rows 里每一行是 {'_row': Excel 里的行号, 列名: 文字, ...}。
+
+def read_table(filename, data, sheet=None, header_row=None):
+    """读一个表格文件。
+
+    返回 {'sheets': [...], 'sheet': 当前表名, 'header_row': 表头在第几行,
+          'candidates': [{'row': 行号, 'text': 这一行的前几格}],  # 给「表头在第几行」选
+          'columns': [...], 'rows': [...]}
+    rows 里每一行是 {'_row': Excel 里的行号, 列名: 文字, ..., '_cells': [(原始值, 数字格式), ...]}。
     """
     name = filename.lower()
     if name.endswith('.numbers'):
@@ -40,26 +47,56 @@ def read_table(filename, data, sheet=None):
         sheet = 'CSV'
     else:
         raise SheetError('只支持 Excel（.xlsx）和 CSV 文件。')
-    columns, rows = _grid_to_rows(grid)
-    if not columns:
-        raise SheetError('这张表是空的。' + ('试试换一张工作表。' if len(sheets) > 1 else ''))
-    return {'sheets': sheets, 'sheet': sheet, 'columns': columns, 'rows': rows}
-
-
-def _grid_to_rows(grid):
-    """第一行有内容的行当表头，下面的每一行变成 {列名: 值}。整行空的跳过。"""
-    header_at = None
-    for i, (_, cells) in enumerate(grid):
-        if any(c.strip() for c in cells):
-            header_at = i
-            break
+    header_at = _find_header(grid, header_row)
     if header_at is None:
-        return [], []
+        raise SheetError('这张表是空的。' + ('试试换一张工作表。' if len(sheets) > 1 else ''))
+    columns, rows = _grid_to_rows(grid, header_at)
+    candidates = []
+    for rownum, cells in grid:
+        texts = [c[0].strip() for c in cells if c[0].strip()]
+        if texts:
+            candidates.append({'row': rownum, 'text': ' | '.join(texts[:6])[:80]})
+        if len(candidates) >= 10:
+            break
+    return {'sheets': sheets, 'sheet': sheet, 'header_row': grid[header_at][0], 'candidates': candidates,
+            'columns': columns, 'rows': rows}
+
+
+def _find_header(grid, header_row=None):
+    """找表头在第几行（grid 里的下标）。
+
+    很多表格最上面有一行大标题（比如「2026 年 9 月工资表」），它只占一个格子，
+    所以要找「填了的格子数量差不多和最宽的那行一样多」的第一行。
+    """
+    if header_row:
+        for i, (rownum, _) in enumerate(grid):
+            if rownum == int(header_row):
+                return i
+    counts = []
+    for i, (_, cells) in enumerate(grid):
+        n = sum(1 for c in cells if c[0].strip())
+        if n:
+            counts.append((i, n))
+        if len(counts) >= 30:
+            break
+    if not counts:
+        return None
+    widest = max(n for _, n in counts)
+    need = 1 if widest <= 1 else max(2, (widest + 1) // 2)
+    for i, n in counts:
+        if n >= need:
+            return i
+    return counts[0][0]
+
+
+def _grid_to_rows(grid, header_at):
+    """表头下面的每一行变成 {列名: 文字}。整行空的跳过。"""
     width = max(len(cells) for _, cells in grid[header_at:])
-    head = grid[header_at][1] + [''] * width
+    head = grid[header_at][1] + [EMPTY] * width
     columns, seen = [], {}
     for j in range(width):
-        col = head[j].strip() or '第%s列' % _col_letter(j)
+        col = head[j][0].strip() or '第%s列' % _col_letter(j)
+        col = re.sub(r'\s*\n\s*', ' ', col)  # 表头里的换行
         if col in seen:
             seen[col] += 1
             col = '%s(%d)' % (col, seen[col])
@@ -68,13 +105,25 @@ def _grid_to_rows(grid):
         columns.append(col)
     rows = []
     for rownum, cells in grid[header_at + 1:]:
-        if not any(c.strip() for c in cells):
+        if not any(c[0].strip() for c in cells):
             continue
         row = {'_row': rownum}
+        raw = []
         for j, col in enumerate(columns):
-            row[col] = cells[j].strip() if j < len(cells) else ''
+            text, value, fmt = cells[j] if j < len(cells) else EMPTY
+            row[col] = text.strip()
+            raw.append((value.strip() if isinstance(value, str) else value, fmt))
+        row['_cells'] = raw
         rows.append(row)
     return columns, rows
+
+
+def cell_value(row, columns, col):
+    """一格的 (原始值, 数字格式)。"""
+    try:
+        return row['_cells'][columns.index(col)]
+    except (KeyError, ValueError, IndexError):
+        return (row.get(col, ''), None)
 
 
 def _col_letter(j):
@@ -100,7 +149,7 @@ def _read_csv(data):
     first = text.split('\n', 1)[0]
     delim = max([',', '\t', ';'], key=first.count)
     reader = csv.reader(io.StringIO(text, newline=''), delimiter=delim)
-    return [(i + 1, row) for i, row in enumerate(reader)]
+    return [(i + 1, [(c, c, None) for c in row]) for i, row in enumerate(reader)]
 
 
 # ---------------------------------------------------------------- XLSX
@@ -219,7 +268,7 @@ def _col_index(letters):
 
 
 def _read_sheet(root, shared, styles, date1904):
-    grid = []
+    rows = {}
     data = _child(root, 'sheetData') if root is not None else None
     next_row = 1
     for row in (data if data is not None else []):
@@ -230,39 +279,68 @@ def _read_sheet(root, shared, styles, date1904):
             m = _CELL_REF.match(c.get('r') or '')
             j = _col_index(m.group(1)) if m else len(cells)
             while len(cells) < j:
-                cells.append('')
-            cells.append(_cell_text(c, shared, styles, date1904))
-        grid.append((rownum, cells))
-    return grid
+                cells.append(EMPTY)
+            cells.append(_cell(c, shared, styles, date1904))
+        rows[rownum] = cells
+    _fill_vertical_merges(root, rows)
+    return sorted(rows.items())
 
 
-def _cell_text(c, shared, styles, date1904):
+def _fill_vertical_merges(root, rows):
+    """竖着合并的格子（比如「部门」一列里好几行合成一格），把值填到每一行。
+
+    横着合并的（比如顶上的大标题）不动，免得把标题当成表头。
+    """
+    merges = _child(root, 'mergeCells') if root is not None else None
+    for m in (merges if merges is not None else []):
+        ref = (m.get('ref') or '').split(':')
+        if len(ref) != 2:
+            continue
+        a, b = _CELL_REF.match(ref[0]), _CELL_REF.match(ref[1])
+        if not a or not b or a.group(1) != b.group(1):
+            continue
+        j, top, bottom = _col_index(a.group(1)), int(a.group(2)), int(b.group(2))
+        cells = rows.get(top, [])
+        if j >= len(cells) or not cells[j][0]:
+            continue
+        for r in range(top + 1, bottom + 1):
+            target = rows.setdefault(r, [])
+            while len(target) <= j:
+                target.append(EMPTY)
+            if not target[j][0]:
+                target[j] = cells[j]
+
+
+def _cell(c, shared, styles, date1904):
     t = c.get('t', 'n')
     v = _child(c, 'v')
     v = v.text if v is not None and v.text is not None else None
     if t == 'inlineStr':
         is_ = _child(c, 'is')
-        return _rich_text(is_) if is_ is not None else ''
+        text = _rich_text(is_) if is_ is not None else ''
+        return (text, text, None)
     if v is None:
-        return ''
+        return EMPTY
     if t == 's':
         try:
-            return shared[int(v)]
+            text = shared[int(v)]
         except (ValueError, IndexError):
-            return ''
+            text = ''
+        return (text, text, None)
     if t == 'b':
-        return 'TRUE' if v == '1' else 'FALSE'
+        return ('TRUE' if v == '1' else 'FALSE', v == '1', None)
     if t in ('str', 'e'):
-        return v
+        return (v, v, None)
     if t == 'd':
-        return v.replace('T', ' ')
+        text = v.replace('T', ' ')
+        return (text, text, None)
     try:
         num = float(v)
     except ValueError:
-        return v
+        return (v, v, None)
     s = int(c.get('s') or 0)
     code = styles[s] if s < len(styles) else 'General'
-    return format_value(num, code, date1904)
+    return (format_value(num, code, date1904), num, code)
 
 
 # ---------------------------------------------------------------- 数字格式
@@ -472,3 +550,204 @@ def _format_date(num, sec, date1904):
             lit = _literal(t)
             out.append(t if lit is None else lit)
     return ''.join(out)
+
+
+# ---------------------------------------------------------------- 写 Excel
+
+_BUILTIN_IDS = {'General': 0, '0': 1, '0.00': 2, '#,##0': 3, '#,##0.00': 4, '0%': 9, '0.00%': 10, '@': 49}
+_BAD_XML = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]')
+FILL_HEAD, FILL_MARK = 'F3EAD9', 'FFE9A8'
+
+
+def _x(s):
+    s = _BAD_XML.sub('', str(s))
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def _text_width(s):
+    import unicodedata
+    return sum(2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1 for ch in s)
+
+
+def safe_sheet_name(name, used):
+    name = re.sub(r'[\[\]:*?/\\]', ' ', str(name)).strip().strip("'")[:31] or 'Sheet'
+    base, n = name, 1
+    while name.lower() in used:
+        n += 1
+        suffix = '(%d)' % n
+        name = base[:31 - len(suffix)] + suffix
+    used.add(name.lower())
+    return name
+
+
+def write_xlsx(sheets):
+    """写一个 .xlsx，返回文件内容。
+
+    sheets: [{'name': 工作表名, 'columns': [列名...], 'rows': [[格子...], ...],
+              'marks': {(行下标, 列下标), ...}（要标黄的格子，可不填）}]
+    格子可以是 str / int / float / bool / None，或者 (原始值, 数字格式) —— 用后者，
+    数字和日期在新表里还是数字和日期，格式也跟原来一样。
+    """
+    numfmts = {}                 # 自定义格式代码 → id
+    xfs = [(0, 0, 0)]            # (数字格式 id, 字体 id, 填充 id)，第 0 个是默认样式
+    fills = {None: 0, FILL_HEAD: 2, FILL_MARK: 3}
+
+    def style(code=None, bold=False, fill=None):
+        if code in (None, '', 'General'):
+            fid = 0
+        elif code in _BUILTIN_IDS:
+            fid = _BUILTIN_IDS[code]
+        else:
+            fid = numfmts.setdefault(code, 164 + len(numfmts))
+        key = (fid, 1 if bold else 0, fills[fill])
+        if key not in xfs:
+            xfs.append(key)
+        return xfs.index(key)
+
+    strings, string_ids = [], {}
+
+    def sid(text):
+        if text not in string_ids:
+            string_ids[text] = len(strings)
+            strings.append(text)
+        return string_ids[text]
+
+    sheet_xml, names, used = [], [], set()
+    for sh in sheets:
+        names.append(safe_sheet_name(sh.get('name') or 'Sheet', used))
+        marks = sh.get('marks') or set()
+        cols = sh['columns']
+        widths = [_text_width(c) for c in cols]
+        out = []
+        head_style = style(bold=True, fill=FILL_HEAD)
+        cells = ''.join('<c r="%s1" t="s" s="%d"><v>%d</v></c>' % (_col_letter(j), head_style, sid(c))
+                        for j, c in enumerate(cols))
+        out.append('<row r="1">%s</row>' % cells)
+        for i, row in enumerate(sh['rows']):
+            r = i + 2
+            parts = []
+            for j, cell in enumerate(row):
+                value, code = cell if isinstance(cell, tuple) else (cell, None)
+                fill = FILL_MARK if (i, j) in marks else None
+                ref = '%s%d' % (_col_letter(j), r)
+                if value is None or value == '':
+                    if fill:
+                        parts.append('<c r="%s" s="%d"/>' % (ref, style(fill=fill)))
+                    continue
+                if isinstance(value, bool):
+                    parts.append('<c r="%s" t="b" s="%d"><v>%d</v></c>' % (ref, style(fill=fill), value))
+                    shown = 'TRUE' if value else 'FALSE'
+                elif isinstance(value, (int, float)) and value == value and abs(value) != float('inf'):
+                    num = repr(float(value))
+                    num = num[:-2] if num.endswith('.0') else num
+                    parts.append('<c r="%s" s="%d"><v>%s</v></c>' % (ref, style(code, fill=fill), num))
+                    shown = format_value(float(value), code or 'General')
+                else:
+                    shown = str(value)
+                    parts.append('<c r="%s" t="s" s="%d"><v>%d</v></c>' % (ref, style(fill=fill), sid(shown)))
+                if i < 500 and j < len(widths):
+                    widths[j] = max(widths[j], _text_width(shown))
+            out.append('<row r="%d">%s</row>' % (r, ''.join(parts)))
+        col_xml = ''.join('<col min="%d" max="%d" width="%.1f" customWidth="1"/>' % (j + 1, j + 1, min(60, max(8, w + 2)))
+                          for j, w in enumerate(widths))
+        sheet_xml.append(
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<sheetViews><sheetView workbookViewId="0"%s>'
+            '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+            '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews>'
+            '<sheetFormatPr defaultRowHeight="15"/>%s<sheetData>%s</sheetData>'
+            '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
+            '</worksheet>' % (' tabSelected="1"' if len(sheet_xml) == 0 else '',
+                              '<cols>%s</cols>' % col_xml if col_xml else '', ''.join(out)))
+
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    styles = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet %s>' % ns +
+        ('<numFmts count="%d">%s</numFmts>' % (len(numfmts), ''.join(
+            '<numFmt numFmtId="%d" formatCode="%s"/>' % (i, _x(c)) for c, i in numfmts.items())) if numfmts else '') +
+        '<fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font>'
+        '<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>'
+        '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FF%s"/><bgColor indexed="64"/></patternFill></fill>'
+        '<fill><patternFill patternType="solid"><fgColor rgb="FF%s"/><bgColor indexed="64"/></patternFill></fill></fills>'
+        % (FILL_HEAD, FILL_MARK) +
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="%d">%s</cellXfs>' % (len(xfs), ''.join(
+            '<xf numFmtId="%d" fontId="%d" fillId="%d" borderId="0" xfId="0"%s%s%s/>' % (
+                f, b, fl, ' applyNumberFormat="1"' if f else '', ' applyFont="1"' if b else '',
+                ' applyFill="1"' if fl else '') for f, b, fl in xfs)) +
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+        '</styleSheet>')
+    shared = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst %s count="%d" uniqueCount="%d">%s</sst>' % (
+        ns, len(strings), len(strings), ''.join(
+            '<si><t%s>%s</t></si>' % (' xml:space="preserve"' if s != s.strip() or '\n' in s else '', _x(s))
+            for s in strings)))
+    workbook = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook %s '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<bookViews><workbookView/></bookViews><sheets>%s</sheets></workbook>' % (ns, ''.join(
+            '<sheet name="%s" sheetId="%d" r:id="rId%d"/>' % (_x(n), i + 1, i + 1) for i, n in enumerate(names))))
+    rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    wb_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        ''.join('<Relationship Id="rId%d" Type="%s/worksheet" Target="worksheets/sheet%d.xml"/>' % (i + 1, rel, i + 1)
+                for i in range(len(names))) +
+        '<Relationship Id="rId%d" Type="%s/styles" Target="styles.xml"/>' % (len(names) + 1, rel) +
+        '<Relationship Id="rId%d" Type="%s/sharedStrings" Target="sharedStrings.xml"/>' % (len(names) + 2, rel) +
+        '</Relationships>')
+    types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        ''.join('<Override PartName="/xl/worksheets/sheet%d.xml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' % (i + 1)
+                for i in range(len(names))) +
+        '<Override PartName="/xl/styles.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        '<Override PartName="/xl/sharedStrings.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+        '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
+        '<Override PartName="/docProps/app.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+        '</Types>')
+    root_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="%s/officeDocument" Target="xl/workbook.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" '
+        'Target="docProps/core.xml"/>'
+        '<Relationship Id="rId3" Type="%s/extended-properties" Target="docProps/app.xml"/>'
+        '</Relationships>' % (rel, rel))
+    now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    core = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+        '<dc:creator>工具箱</dc:creator>'
+        '<dcterms:created xsi:type="dcterms:W3CDTF">%s</dcterms:created>'
+        '<dcterms:modified xsi:type="dcterms:W3CDTF">%s</dcterms:modified>'
+        '</cp:coreProperties>' % (now, now))
+    app = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+           '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">'
+           '<Application>Microsoft Excel</Application></Properties>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml', types)
+        z.writestr('_rels/.rels', root_rels)
+        z.writestr('docProps/core.xml', core)
+        z.writestr('docProps/app.xml', app)
+        z.writestr('xl/workbook.xml', workbook)
+        z.writestr('xl/_rels/workbook.xml.rels', wb_rels)
+        z.writestr('xl/styles.xml', styles)
+        z.writestr('xl/sharedStrings.xml', shared)
+        for i, x in enumerate(sheet_xml):
+            z.writestr('xl/worksheets/sheet%d.xml' % (i + 1), x)
+    return buf.getvalue()
