@@ -1,0 +1,264 @@
+"""端到端测试：启动工具箱和一个假邮件服务器，走一遍完整流程。
+
+    python3 tests/test_all.py
+
+不会真的发邮件，也不会动 ~/工具箱数据（用临时文件夹）。
+"""
+import email
+import email.header
+import glob
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import unittest
+import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+sys.path.insert(0, ROOT)
+sys.path.insert(0, HERE)
+
+import fake_smtp  # noqa: E402
+import mailer  # noqa: E402
+import sheets  # noqa: E402
+
+SAMPLE = os.path.join(ROOT, '示例名单.xlsx')
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+
+def decode(h):
+    return str(email.header.make_header(email.header.decode_header(h or '')))
+
+
+class Unit(unittest.TestCase):
+    def test_render(self):
+        cols = ['姓名', '公司', '邮箱']
+        row = {'姓名': '张三', '公司': '', '邮箱': 'a@b.com'}
+        self.assertEqual(mailer.render('{姓名}您好', row, cols)[0], '张三您好')
+        self.assertEqual(mailer.render('｛姓名｝', row, cols)[0], '张三')
+        self.assertEqual(mailer.render('{ 姓名 }', row, cols)[0], '张三')
+        self.assertEqual(mailer.render('{公司|贵公司}', row, cols)[0], '贵公司')
+        self.assertEqual(mailer.render('{{原样}}', row, cols)[0], '{原样}')
+        _, err, warn = mailer.render('{公司}{职位}', row, cols)
+        self.assertEqual(err, ['表格里没有「职位」这一列'])
+        self.assertEqual(warn, ['「公司」是空的'])
+
+    def test_addresses(self):
+        self.assertEqual(mailer.parse_addresses('a@b.com；c@d.cn、 e@f.org')[0], ['a@b.com', 'c@d.cn', 'e@f.org'])
+        self.assertEqual(mailer.parse_addresses('张三 <a@b.com>')[0], ['a@b.com'])
+        self.assertTrue(mailer.parse_addresses('a＠b.com')[1])
+        self.assertTrue(mailer.parse_addresses('abc')[1])
+        self.assertTrue(mailer.parse_addresses('a@b')[1])
+        self.assertEqual(mailer.parse_addresses('A@b.com, a@b.com')[0], ['A@b.com'])
+
+    def test_attachments(self):
+        files = [{'id': str(i), 'name': n, 'rel': n} for i, n in
+                 enumerate(['张三.pdf', '张三丰.pdf', '李四_9月工资条.pdf', 'a[1].txt', 'sub/x.doc'])]
+        cols = ['姓名', '附件']
+
+        def names(rule, row):
+            got, err, _ = mailer.match_attachments(rule, row, cols, files)
+            return [f['name'] for f in got], err
+        self.assertEqual(names('{姓名}', {'姓名': '张三'}), (['张三.pdf'], []))
+        self.assertEqual(names('{姓名}*', {'姓名': '李四'}), (['李四_9月工资条.pdf'], []))
+        self.assertEqual(names('{附件}', {'附件': 'a[1].txt; 张三.pdf'}), (['a[1].txt', '张三.pdf'], []))
+        self.assertEqual(names('{姓名}', {'姓名': '王五'})[1], ['附件文件夹里找不到「王五」'])
+
+    def test_csv(self):
+        data = '姓名,邮箱\n张三,a@b.com\n\n李四,c@d.com\n'.encode('gbk')
+        t = sheets.read_table('x.csv', data)
+        self.assertEqual(t['columns'], ['姓名', '邮箱'])
+        self.assertEqual([r['姓名'] for r in t['rows']], ['张三', '李四'])
+        t = sheets.read_table('x.csv', '﻿姓名\t邮箱\n王五\te@f.com\n'.encode('utf-8'))
+        self.assertEqual(t['rows'][0]['邮箱'], 'e@f.com')
+
+    def test_sample_xlsx(self):
+        with open(SAMPLE, 'rb') as f:
+            t = sheets.read_table('示例名单.xlsx', f.read())
+        self.assertIn('邮箱', t['columns'])
+        self.assertTrue(t['rows'])
+
+    def test_formats(self):
+        f = sheets.format_value
+        self.assertEqual(f(8500, '#,##0.00'), '8,500.00')
+        self.assertEqual(f(2.675, '0.00'), '2.68')
+        self.assertEqual(f(0.125, '0.0%'), '12.5%')
+        self.assertEqual(f(-5, '¥#,##0.00'), '-¥5.00')
+        self.assertEqual(f(46304, 'yyyy"年"m"月"d"日"'), '2026年10月9日')
+        self.assertEqual(f(46304.5, 'yyyy/m/d h:mm'), '2026/10/9 12:00')
+        self.assertEqual(f(13800138000, 'General'), '13800138000')
+
+    def test_message(self):
+        tmp = tempfile.mkdtemp()
+        p = os.path.join(tmp, 'f')
+        with open(p, 'wb') as fp:
+            fp.write(b'%PDF-1.4 hello')
+        data, _ = mailer.build_message('星光 科技', 'me@qq.com', ['a@b.com'], ['c@d.com'], '您好，张三', '正文\n第二行',
+                                       [(p, '张三 9月工资条.pdf')])
+        m = email.message_from_bytes(data)
+        self.assertEqual(decode(m['Subject']), '您好，张三')
+        self.assertIn('me@qq.com', m['From'])
+        self.assertEqual(decode(email.utils.parseaddr(m['From'])[0]), '星光 科技')
+        parts = list(m.walk())
+        self.assertEqual(parts[1].get_payload(decode=True).decode('utf-8'), '正文\n第二行')
+        self.assertEqual(decode(parts[2].get_param('filename', header='Content-Disposition')), '张三 9月工资条.pdf')
+        self.assertEqual(parts[2].get_payload(decode=True), b'%PDF-1.4 hello')
+        shutil.rmtree(tmp)
+
+
+class EndToEnd(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.inbox = os.path.join(cls.tmp, 'inbox')
+        cls.smtp_port = free_port()
+        cls.smtp = fake_smtp.serve(cls.smtp_port, cls.inbox)
+        threading.Thread(target=cls.smtp.serve_forever, daemon=True).start()
+        env = dict(os.environ, TOOLBOX_DATA=os.path.join(cls.tmp, 'data'))
+        cls.proc = subprocess.Popen([sys.executable, os.path.join(ROOT, 'app.py'), '--no-browser',
+                                     '--port', str(free_port())], env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        line = ''
+        while 'http://' not in line:
+            line = cls.proc.stdout.readline().decode()
+            if not line and cls.proc.poll() is not None:
+                raise RuntimeError('工具箱没启动起来')
+        cls.base = line[line.index('http://'):].strip()
+        html = urllib.request.urlopen(cls.base).read().decode()
+        cls.token = html.split('name="token" content="')[1].split('"')[0]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.proc.terminate()
+        cls.proc.wait()
+        cls.proc.stdout.close()
+        cls.smtp.shutdown()
+        cls.smtp.server_close()
+        shutil.rmtree(cls.tmp)
+
+    def call(self, path, body=None, raw=None, query='', expect=200):
+        url = self.base.rstrip('/') + path + (('?' + query) if query else '')
+        data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
+        req = urllib.request.Request(url, data=data, headers={'X-Token': self.token})
+        try:
+            with urllib.request.urlopen(req) as r:
+                code, out = r.status, json.load(r)
+        except urllib.error.HTTPError as e:
+            code, out = e.code, json.load(e)
+        self.assertEqual(code, expect, out)
+        return out
+
+    def wait_job(self):
+        for _ in range(200):
+            job = self.call('/api/status')['job']
+            if job['state'] in ('done', 'stopped', 'paused'):
+                return job
+            time.sleep(0.1)
+        self.fail('发送一直没结束')
+
+    def test_flow(self):
+        # 没有 token 的请求被拒
+        req = urllib.request.Request(self.base + 'api/init')
+        with self.assertRaises(urllib.error.HTTPError):
+            urllib.request.urlopen(req)
+
+        acct = {'user': 'me@example.com', 'preset': 'custom', 'host': '127.0.0.1', 'port': self.smtp_port,
+                'security': 'none', 'name': '星光科技', 'remember': True}
+        err = self.call('/api/test_login', dict(acct, password='wrong'), expect=400)
+        self.assertIn('登录失败', err['error'])
+        self.assertFalse(self.call('/api/init')['settings']['has_password'])
+        self.call('/api/test_login', dict(acct, password='good-password'))
+        self.assertTrue(self.call('/api/init')['settings']['has_password'])
+
+        csv_data = ('姓名,邮箱,金额\n张三,zhang@example.com,100\n李四,reject@example.com,200\n'
+                    '王五,,300\n赵六,zhao@example.com,400\n张三,zhang@example.com,500\n').encode('utf-8')
+        t = self.call('/api/upload_table', raw=csv_data, query='name=list.csv')
+        self.assertEqual(len(t['rows']), 5)
+
+        f = self.call('/api/upload_file', raw=b'common-file', query='group=common&name=%E8%AF%B4%E6%98%8E.txt')
+        for n in ('张三.txt', '赵六.txt', '李四.txt'):
+            self.call('/api/upload_file', raw=n.encode(), query='group=folder&name=%s&rel=folder/%s' % (
+                urllib.parse.quote(n), urllib.parse.quote(n)))
+
+        tpl = {'to': '{邮箱}', 'cc': '', 'bcc': '', 'subject': '{姓名}的通知', 'body': '{姓名}您好，金额 {金额} 元。',
+               'rule': '{姓名}'}
+        p = self.call('/api/preview', {'template': tpl})
+        items = p['items']
+        self.assertEqual(items[0]['body'], '张三您好，金额 100 元。')
+        self.assertEqual([a['name'] for a in items[0]['attachments']], ['说明.txt', '张三.txt'])
+        self.assertIn('收件人是空的', items[2]['errors'])
+        self.assertTrue(any('第 6 行也出现了' in w for w in items[0]['warnings']))
+        self.assertEqual(p['used'], ['邮箱', '姓名', '金额'])
+
+        self.call('/api/test_send', {'template': tpl, 'index': 0})
+        test_mail = email.message_from_bytes(open(sorted(glob.glob(self.inbox + '/*.eml'))[-1], 'rb').read())
+        self.assertEqual(decode(test_mail['Subject']), '[测试] 张三的通知')
+        self.assertIn('me@example.com', test_mail['X-Envelope-To'])
+
+        # 发第 2、4、5 行之外的：张三(0)、李四(1, 地址会被拒)、赵六(3)
+        self.call('/api/send', {'template': tpl, 'indexes': [0, 1, 3], 'interval': 0, 'bcc_self': True})
+        job = self.wait_job()
+        self.assertEqual(job['state'], 'done')
+        st = [it['status'] for it in job['items']]
+        self.assertEqual(st, ['sent', 'failed', 'sent'])
+        self.assertIn('收件地址被拒', job['items'][1]['error'])
+        self.assertTrue(os.path.exists(job['log']))
+        with open(job['log'], encoding='utf-8-sig') as fp:
+            log = fp.read()
+        self.assertIn('zhao@example.com', log)
+        last = email.message_from_bytes(open(sorted(glob.glob(self.inbox + '/*.eml'))[-1], 'rb').read())
+        self.assertIn('me@example.com', last['X-Envelope-To'])  # 密送给自己
+        self.assertNotIn('me@example.com', last['To'])
+
+        # 发过的再预览会提醒
+        p = self.call('/api/preview', {'template': tpl})
+        self.assertTrue(p['items'][0]['sent_before'])
+        self.assertFalse(p['items'][3]['sent_before'] is None)
+
+        # 重发失败的
+        job = self.call('/api/retry_failed', {})
+        self.assertEqual(len(job['items']), 1)
+        self.wait_job()
+
+    def test_rate_limit_pauses(self):
+        self.call('/api/job', {'action': 'clear'})
+        port = free_port()
+        acct = {'user': 'me@example.com', 'preset': 'custom', 'host': '127.0.0.1', 'port': port,
+                'security': 'none', 'name': '', 'remember': False}
+        limited = fake_smtp.serve(port, os.path.join(self.tmp, 'limited'), limit=1)
+        threading.Thread(target=limited.serve_forever, daemon=True).start()
+        try:
+            self.call('/api/test_login', dict(acct, password='good-password'))
+            csv_data = '姓名,邮箱\n甲,a@example.com\n乙,b@example.com\n丙,c@example.com\n'.encode()
+            self.call('/api/upload_table', raw=csv_data, query='name=l.csv')
+            self.call('/api/remove_files', {'group': 'folder'})
+            self.call('/api/remove_files', {'group': 'common'})
+            tpl = {'to': '{邮箱}', 'subject': '限流测试 {姓名}', 'body': 'hi', 'rule': ''}
+            self.call('/api/send', {'template': tpl, 'indexes': [0, 1, 2], 'interval': 0})
+            job = self.wait_job()
+            self.assertEqual(job['state'], 'paused')
+            self.assertIn('发得太多', job['message'])
+            self.assertEqual([it['status'] for it in job['items']], ['sent', 'waiting', 'waiting'])
+            limited.limit = None
+            self.call('/api/job', {'action': 'resume'})
+            time.sleep(0.3)
+            job = self.wait_job()
+            self.assertEqual([it['status'] for it in job['items']], ['sent', 'sent', 'sent'])
+        finally:
+            limited.shutdown()
+            limited.server_close()
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

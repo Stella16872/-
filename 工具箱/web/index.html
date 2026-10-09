@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="token" content="__TOKEN__">
+<title>工具箱</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">工具箱</div>
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-tab="mail" role="tab" aria-selected="true">群发邮件</button>
+  </nav>
+  <button class="ghost small" id="quitBtn" title="关掉工具箱">退出</button>
+</header>
+
+<main class="page" id="tab-mail">
+
+  <!-- 1 发件邮箱 -->
+  <section class="card" id="s1">
+    <div class="card-head"><span class="num">1</span><h2>发件邮箱</h2>
+      <div class="head-side" id="acctSummary"></div></div>
+    <div id="acctForm" class="form">
+      <div class="grid2">
+        <label class="field"><span>邮箱地址</span>
+          <input id="fUser" type="email" autocomplete="off" spellcheck="false" placeholder="比如 12345@qq.com"></label>
+        <label class="field"><span>邮箱类型</span><select id="fPreset"></select></label>
+      </div>
+      <div class="help" id="presetHelp"></div>
+      <div class="grid2">
+        <label class="field"><span id="pwLabel">授权码</span>
+          <input id="fPass" type="password" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>发件人名字 <em>（对方看到的，可不填）</em></span>
+          <input id="fName" type="text" placeholder="比如 张三 / 星光科技"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="fRemember" checked>
+        <span id="rememberLabel">记住授权码（存进这台 Mac 的「钥匙串」，下次不用再填）</span></label>
+      <details class="adv"><summary>服务器设置</summary>
+        <div class="grid3">
+          <label class="field"><span>SMTP 服务器</span><input id="fHost" type="text" spellcheck="false"></label>
+          <label class="field"><span>端口</span><input id="fPort" type="number" min="1" max="65535"></label>
+          <label class="field"><span>加密方式</span>
+            <select id="fSec"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option>
+              <option value="none">不加密</option></select></label>
+        </div>
+      </details>
+      <div class="actions">
+        <button class="primary" id="loginBtn">保存并测试登录</button>
+        <button class="ghost" id="cancelAcct" hidden>取消</button>
+        <span class="status-line" id="loginMsg"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 名单 -->
+  <section class="card" id="s2">
+    <div class="card-head"><span class="num">2</span><h2>名单</h2><div class="head-side" id="tableSide"></div></div>
+    <label class="drop" id="drop">
+      <input type="file" id="tableInput" accept=".xlsx,.xlsm,.csv,.tsv,.txt,.xls,.numbers" hidden>
+      <div class="drop-main">把 Excel 或 CSV 文件拖到这里，或者<u>点这里选择</u></div>
+      <div class="drop-sub">第一行写标题（比如 姓名、邮箱、公司），下面每个人占一行。</div>
+    </label>
+    <div id="tableView" hidden>
+      <div class="table-bar">
+        <span class="file-chip" id="tableName"></span>
+        <label class="inline" id="sheetWrap" hidden>工作表 <select id="sheetSel"></select></label>
+        <span class="muted" id="tableCount"></span>
+        <span class="grow"></span>
+        <button class="ghost small" id="tableChange">换一个文件</button>
+      </div>
+      <div class="table-wrap"><table class="data" id="tableData"></table></div>
+      <div class="muted small" id="tableMore"></div>
+    </div>
+  </section>
+
+  <!-- 3 写邮件 -->
+  <section class="card" id="s3">
+    <div class="card-head"><span class="num">3</span><h2>写邮件</h2>
+      <div class="head-side">
+        <select id="tplSel" title="载入以前存的模板"><option value="">载入模板…</option></select>
+        <button class="ghost small" id="tplSave">存为模板</button>
+        <button class="ghost small" id="tplDel" hidden>删除这个模板</button>
+      </div></div>
+    <div class="vars" id="vars">
+      <span class="muted">先在第 2 步选名单，这里会出现表格里的列，点一下就能插入到光标的位置。</span>
+    </div>
+    <div class="form">
+      <label class="field"><span>收件人</span>
+        <input class="tf" id="tTo" data-key="to" type="text" spellcheck="false" placeholder="{邮箱}"></label>
+      <div class="cc-toggle" id="ccToggle"><button class="link" id="ccShow">+ 抄送 / 密送</button></div>
+      <div class="grid2" id="ccRow" hidden>
+        <label class="field"><span>抄送 <em>（可不填）</em></span>
+          <input class="tf" id="tCc" data-key="cc" type="text" spellcheck="false"></label>
+        <label class="field"><span>密送 <em>（可不填）</em></span>
+          <input class="tf" id="tBcc" data-key="bcc" type="text" spellcheck="false"></label>
+      </div>
+      <label class="field"><span>主题</span>
+        <input class="tf" id="tSubject" data-key="subject" type="text" placeholder="比如：{姓名}，您好——十月活动邀请"></label>
+      <label class="field"><span>正文</span>
+        <textarea class="tf" id="tBody" data-key="body" rows="12"
+          placeholder="{姓名} 您好：&#10;&#10;这里写正文。需要每个人不一样的地方，就点上面的按钮插入对应的列。"></textarea></label>
+      <div class="hint warn" id="braceHint" hidden></div>
+
+      <div class="attach">
+        <div class="attach-col">
+          <div class="attach-title">每封都带的附件</div>
+          <div class="chips" id="commonList"></div>
+          <button class="ghost small" id="commonAdd">添加文件</button>
+          <input type="file" id="commonInput" multiple hidden>
+        </div>
+        <div class="attach-col">
+          <div class="attach-title">每个人不一样的附件 <em>（比如每人一份工资条）</em></div>
+          <div class="folder-line">
+            <button class="ghost small" id="folderAdd">选择文件夹</button>
+            <span class="muted" id="folderInfo">还没选</span>
+            <button class="link" id="folderClear" hidden>清除</button>
+            <input type="file" id="folderInput" webkitdirectory multiple hidden>
+          </div>
+          <div class="help small">浏览器可能会问「要上传这些文件吗」：这里的「上传」只是交给你电脑上的工具箱，文件不会离开这台电脑。</div>
+          <label class="field"><span>文件名规则</span>
+            <input class="tf" id="tRule" data-key="rule" type="text" spellcheck="false" placeholder="{姓名}"></label>
+          <div class="help small">
+            文件叫 <code>张三.pdf</code> 这种：填 <code>{姓名}</code><br>
+            文件叫 <code>张三_9月工资条.pdf</code> 这种：填 <code>{姓名}*</code>（星号代表「后面随便什么」）<br>
+            表格里有一列直接写了文件名：填那一列，比如 <code>{附件}</code>；一个人多个文件用分号隔开
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 检查 -->
+  <section class="card" id="s4">
+    <div class="card-head"><span class="num">4</span><h2>检查和预览</h2><div class="head-side" id="checkSide"></div></div>
+    <div id="checkEmpty" class="muted">选好名单、写好邮件以后，这里会一封封列出来，发之前可以逐封检查。</div>
+    <div id="checkView" hidden>
+      <div class="filters" id="filters"></div>
+      <div class="split">
+        <div class="list-pane">
+          <div class="list-tools">
+            <label class="check small"><input type="checkbox" id="selAll"> <span>全选</span></label>
+            <span class="muted small" id="selCount"></span>
+          </div>
+          <div class="list" id="list"></div>
+        </div>
+        <div class="preview-pane">
+          <div class="mail" id="mailPreview"></div>
+          <div class="actions">
+            <button class="ghost" id="testBtn">把这封发给自己测试</button>
+            <span class="status-line" id="testMsg"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 发送 -->
+  <section class="card" id="s5">
+    <div class="card-head"><span class="num">5</span><h2>发送</h2></div>
+    <div id="sendSetup">
+      <div class="send-opts">
+        <label class="inline">每封间隔 <input type="number" id="interval" min="0" max="600" step="1" value="5"> 秒</label>
+        <span class="muted small">发得太快容易被邮箱当成垃圾邮件，建议 5 秒以上。</span>
+      </div>
+      <label class="check"><input type="checkbox" id="bccSelf"> <span>每封都密送一份给自己留底</span></label>
+      <label class="check" id="skipSentWrap" hidden><input type="checkbox" id="skipSent" checked>
+        <span id="skipSentLabel">跳过最近已经发过同样主题的人</span></label>
+      <div class="actions">
+        <button class="primary big" id="sendBtn" disabled>开始发送</button>
+        <span class="status-line" id="sendHint"></span>
+      </div>
+    </div>
+    <div id="jobView" hidden>
+      <div class="banner" id="jobBanner" hidden></div>
+      <div class="progress"><div class="bar" id="jobBar"></div></div>
+      <div class="job-line">
+        <span id="jobText"></span><span class="grow"></span>
+        <button class="ghost" id="pauseBtn">暂停</button>
+        <button class="ghost" id="resumeBtn" hidden>继续</button>
+        <button class="ghost danger" id="stopBtn">停止</button>
+      </div>
+      <div class="job-done" id="jobDone" hidden>
+        <button class="primary" id="retryBtn" hidden></button>
+        <button class="ghost" id="logBtn">打开发送记录</button>
+        <button class="ghost" id="newBatch">完成，回到发送设置</button>
+      </div>
+      <div class="list job-list" id="jobList"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    所有东西都只在这台电脑上处理，邮件从你自己的邮箱直接发出去。
+    发送记录和模板存在 <code id="dataDir"></code>
+    <button class="link" id="openData">打开</button>
+  </footer>
+</main>
+
+<div class="closed" id="closed" hidden>
+  <div><h2>工具箱已关闭</h2><p>可以关掉这个网页和终端窗口了。下次用的时候，再双击「双击打开.command」。</p></div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <input type="text" id="dlgInput" hidden>
+    <div class="actions right">
+      <button type="button" class="ghost" id="dlgCancel">取消</button>
+      <button value="ok" class="primary" id="dlgOk">确定</button>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
